@@ -4,7 +4,7 @@ WARNING: Alpha-Level Software. DO NOT USE YET! I don't.
 
 ## A PostgreSQL Client for the JVM.
 
-The common interface in Java to talk to Postgres is the official JDBC-Driver. JDBC tries to
+The standard interface in Java to talk to Postgres is the official JDBC-Driver. JDBC tries to
 create a common Interface for Databases but not all SQL Databases are created equal. That
 makes using Postgres-specific features rather cumbersome to use.
 
@@ -17,7 +17,7 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 ### Status
 
 - TCP Procotol is implemented and working.
-- Only a handful of Types have been implemented. (see /src/java/shadow/pgsql/types)
+- Only a handful of [Types](https://github.com/thheller/shadow-pgsql/tree/master/src/java/shadow/pgsql/types) have been implemented. Not enough for basically anything.
 - API has somewhat stabilized (after 10 rewrites)
 
 ### TODO:
@@ -25,7 +25,7 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 - more Types
 - better Error Handling & Recovery (none right now)
 - Docs
-- maybe switch to ByteBuffer/Channel (Input/OutputStream is kinda old)
+- SSL & Auth Support
 - Generics (didn't write any serious Java for over 10 years, need to learn Generics first)
 - check Performance (should be faster than JDBC, but needs check to be sure)
 
