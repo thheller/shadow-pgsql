@@ -23,6 +23,7 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 ### TODO:
 
 - more Types
+- Tests
 - better Error Handling & Recovery (none right now)
 - Docs
 - SSL & Auth Support
