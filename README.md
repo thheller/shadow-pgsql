@@ -23,6 +23,7 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 ### TODO:
 
 - more Types
+- UTF-8 is hardcoded right now, things will go wrong if backend is not UTF-8
 - Tests
 - better Error Handling & Recovery (none right now)
 - Docs
