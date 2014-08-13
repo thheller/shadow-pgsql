@@ -26,23 +26,11 @@ public class PreparedQuery extends AbstractStatement {
         this.rowBuilder = rowBuilder;
     }
 
-    private int batchSize = 0;
-
-    public int getBatchSize() {
-        return batchSize;
-    }
-
-    public void setBatchSize(int batchSize) {
-        this.batchSize = batchSize;
-    }
-
     public Object execute(Object... queryParams) throws IOException {
         return execute(resultBuilder, rowBuilder, Arrays.asList(queryParams));
     }
 
     public Object execute(final List queryParams) throws IOException {
-        final String portalName = String.format("p%d", portalId++);
-
         if (queryParams.size() != typeEncoders.length) {
             throw new IllegalArgumentException(String.format("Not enough Params provided to Statement, expected %d got %d", typeEncoders.length, queryParams.size()));
         }
@@ -53,9 +41,9 @@ public class PreparedQuery extends AbstractStatement {
 
         // flow -> B/E/H
 
-        writeBind(typeDecoders, queryParams, portalName);
-        writeExecute(portalName, batchSize);
-        writeFlush();
+        writeBind(typeDecoders, queryParams, null);
+        writeExecute(null, 0);
+        writeSync();
 
         pg.output.flushAndReset();
 
@@ -77,13 +65,16 @@ public class PreparedQuery extends AbstractStatement {
                 }
                 case 's': // PortalSuspended
                 {
+                    throw new UnsupportedOperationException("needs more thought as this is only supported in transactions");
+                    /*
                     final int size = pg.input.readInt32();
 
                     pg.output.checkReset();
-                    this.writeExecute(portalName, batchSize);
-                    this.writeFlush();
+                    this.writeExecute(null, 0);
+                    this.writeSync();
                     pg.output.flushAndReset();
                     break;
+                    */
                 }
                 case 'D':  // DataRow
                 {
@@ -129,6 +120,12 @@ public class PreparedQuery extends AbstractStatement {
                     final int size = pg.input.readInt32();
                     final String tag = pg.input.readString();
 
+                    // FIXME: losing information (tag)
+                    break;
+                }
+                case 'Z': // ReadyForQuery
+                {
+                    pg.input.readReadyForQuery();
                     break RESULT_LOOP;
                 }
                 default: {
@@ -136,8 +133,6 @@ public class PreparedQuery extends AbstractStatement {
                 }
             }
         }
-
-        doSync();
 
         return resultBuilder.complete(queryResult);
     }

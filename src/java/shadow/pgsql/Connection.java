@@ -16,6 +16,7 @@ import java.util.Map;
  */
 public class Connection implements AutoCloseable {
     private int queryId = 0;
+    private int savepointId = 0;
 
     private final Database db;
     private final Socket socket;
@@ -129,6 +130,64 @@ public class Connection implements AutoCloseable {
         // startup complete, ready for query
     }
 
+    public boolean isInTransaction() {
+        return this.txState == TransactionStatus.TRANSACTION;
+    }
+
+
+    // FIXME: make public? should only be used for simple commands
+    // simple only supports string encoding for types
+    StatementResult simpleStatement(String query) throws IOException {
+        checkReady();
+
+        output.checkReset();
+        output.beginCommand('Q');
+        output.string(query);
+        output.complete();
+
+        output.flushAndReset();
+
+
+        return input.readStatementResult();
+    }
+
+    // FIXME: transaction mode
+    // http://www.postgresql.org/docs/9.3/static/sql-begin.html
+    public void begin() throws IOException {
+        checkReady();
+
+        switch(txState) {
+            case IDLE:
+                this.simpleStatement("BEGIN");
+                break;
+            case TRANSACTION:
+                break;
+            default:
+                throw new IllegalStateException(String.format("can't start transaction while in %s state", txState));
+        }
+    }
+
+    public Savepoint savepoint() throws IOException {
+        final String name = String.format("P%d", savepointId++);
+        simpleStatement(String.format("SAVEPOINT %s", name));
+        return new Savepoint(this, name);
+    }
+
+    public void commit() throws IOException {
+        checkReady();
+
+        if (txState != TransactionStatus.TRANSACTION) {
+            throw new IllegalStateException(String.format("not in a transaction, in %s", txState));
+        }
+
+        this.simpleStatement("COMMIT");
+        this.savepointId = 0;
+    }
+
+    public void rollback() throws IOException {
+        this.simpleStatement("ROLLBACK");
+    }
+
     public Object executeQuery(String query, Object... params) throws IOException {
         return executeQuery(new SimpleQuery(query), Arrays.asList(params));
     }
@@ -143,10 +202,14 @@ public class Connection implements AutoCloseable {
         }
     }
 
-    public int execute(String statement, Object... params) throws IOException {
+    public StatementResult execute(String statement, Object... params) throws IOException {
         try (PreparedStatement stmt = prepare(new SimpleStatement(statement))) {
             return stmt.execute(params);
         }
+    }
+
+    public PreparedStatement prepare(String query) throws IOException {
+        return prepare(new SimpleStatement(query));
     }
 
     public PreparedStatement prepare(Statement query) throws IOException {

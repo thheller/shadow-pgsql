@@ -172,4 +172,40 @@ public class ProtocolInput {
     public void read(byte[] data) throws IOException {
         stream.read(data);
     }
+
+    public StatementResult readStatementResult() throws IOException {
+        StatementResult result = null;
+
+        RESULT_LOOP:
+        while (true) {
+            final char type = readNextCommand();
+
+            switch (type) {
+                case '2': // BindComplete
+                {
+                    final int size = readInt32();
+                    if (size != 4) {
+                        throw new IllegalStateException(String.format("BindComplete was not size 4 (was %d)", size));
+                    }
+                    break;
+                }
+                case 'C': { // CommandComplete
+                    final int size = readInt32();
+                    final String tag = readString();
+
+                    result = new StatementResult(tag);
+                    break;
+                }
+                case 'Z': {
+                    pg.input.readReadyForQuery();
+                    break RESULT_LOOP;
+                }
+                default: {
+                    throw new IllegalStateException(String.format("invalid protocol action while reading statement results: '%s'", type));
+                }
+            }
+        }
+
+        return result;
+    }
 }
