@@ -217,7 +217,7 @@ public class Connection implements AutoCloseable {
 
         final String statementId = String.format("s%d", queryId++);
 
-        writeParseDescribeSync(query, typeHints, statementId);
+        writeParseDescribeSync(query.getStatement(), typeHints, statementId);
 
         int[] paramInfo = null;
         boolean parsed = false;
@@ -283,7 +283,7 @@ public class Connection implements AutoCloseable {
         final List<TypeHandler> typeHints = query.getParameterTypes();
 
         final String statementId = String.format("s%d", queryId++);
-        writeParseDescribeSync(query, typeHints, statementId);
+        writeParseDescribeSync(query.getStatement(), typeHints, statementId);
 
         int[] paramInfo = null;
         ColumnInfo[] columnInfos = null;
@@ -360,7 +360,7 @@ public class Connection implements AutoCloseable {
         return new PreparedQuery(this, statementId, encoders, query, columnInfos, decoders, resultBuilder, rowBuilder);
     }
 
-    private void writeParseDescribeSync(Statement query, List<TypeHandler> typeHints, String statementId) throws IOException {
+    private void writeParseDescribeSync(String query, List<TypeHandler> typeHints, String statementId) throws IOException {
         checkReady();
 
         output.checkReset();
@@ -369,7 +369,7 @@ public class Connection implements AutoCloseable {
         // Parse
         output.beginCommand('P');
         output.string(statementId);
-        output.string(query.getStatement());
+        output.string(query);
         output.int16((short) typeHints.size());
         for (TypeHandler t : typeHints) {
             output.int32(t.getTypeOid());
