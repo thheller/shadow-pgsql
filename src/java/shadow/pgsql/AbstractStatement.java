@@ -36,22 +36,26 @@ public abstract class AbstractStatement implements AutoCloseable {
 
             Object param = queryParams.get(i);
 
-            if (param == null) {
-                pg.output.int32(-1);
-            } else if (encoder.supportsBinary()) {
-                pg.output.beginExclusive();
-                encoder.encodeBinary(pg, pg.output, param);
-                pg.output.complete();
-            } else {
-                String paramString = encoder.encodeToString(pg, param);
+            try {
+                if (param == null) {
+                    pg.output.int32(-1);
+                } else if (encoder.supportsBinary()) {
+                    pg.output.beginExclusive();
+                    encoder.encodeBinary(pg, pg.output, param);
+                    pg.output.complete();
+                } else {
+                    String paramString = encoder.encodeToString(pg, param);
 
-                // FIXME: assumes UTF-8
-                byte[] bytes = paramString.getBytes();
+                    // FIXME: assumes UTF-8
+                    byte[] bytes = paramString.getBytes();
 
-                pg.output.int32(bytes.length);
-                if (bytes.length > 0) {
-                    pg.output.bytea(bytes);
+                    pg.output.int32(bytes.length);
+                    if (bytes.length > 0) {
+                        pg.output.bytea(bytes);
+                    }
                 }
+            } catch (Exception e) {
+                throw new IllegalArgumentException(String.format("Failed to encode parameter $%d", i + 1), e);
             }
         }
 
@@ -86,8 +90,7 @@ public abstract class AbstractStatement implements AutoCloseable {
         pg.output.flushAndReset();
 
         READY_LOOP:
-        while (true)
-        {
+        while (true) {
             final char type = pg.input.readNextCommand();
             switch (type) {
                 case 'Z':  // ReadyForQuery
@@ -102,60 +105,32 @@ public abstract class AbstractStatement implements AutoCloseable {
         }
     }
 
-    protected void writeBindExecuteSync(TypeHandler[] typeDecoders, List<Object> queryParams, String portalId, int limit) throws IOException {
+    protected void executeWithParams(TypeHandler[] typeDecoders, List queryParams) throws IOException {
         if (queryParams.size() != typeEncoders.length) {
             throw new IllegalArgumentException(String.format("Not enough Params provided to Statement, expected %d got %d", typeEncoders.length, queryParams.size()));
         }
 
         pg.checkReady();
         pg.output.checkReset();
-        pg.state = ConnectionState.QUERY_RESULT;
 
-        writeBind(typeDecoders, queryParams, portalId);
-        writeExecute(portalId, limit);
-        writeSync();
+        // flow -> B/E/H
 
-        // flow -> B/E/S
+        try {
+            writeBind(typeDecoders, queryParams, null);
+            writeExecute(null, 0);
+            writeSync();
 
-        pg.output.flushAndReset();
+            pg.output.flushAndReset();
+            pg.state = ConnectionState.QUERY_RESULT;
+        } catch (Exception e) {
+            // nothing on the wire, no harm done
+            pg.state = ConnectionState.READY;
+            pg.output.reset();
+            throw e;
+        }
     }
 
     public void close() throws IOException {
-        pg.output.checkReset();
-        pg.state = ConnectionState.QUERY_CLOSE;
-
-        // Close
-        pg.output.beginCommand('C');
-        pg.output.int8((byte) 'S');
-        pg.output.string(statementId);
-        pg.output.complete();
-
-        // Sync
-        pg.output.simpleCommand('S');
-        pg.output.flushAndReset();
-
-        // CloseComplete + Ready
-        CLOSE_LOOP:
-        while (true) {
-            final char type = pg.input.readNextCommand();
-            switch (type) {
-                case '3': // CloseComplete
-                {
-                    final int size = pg.input.readInt32();
-                    if (size != 4) {
-                        throw new IllegalStateException(String.format("CloseComplete should be size 4 (was %d)", size));
-                    }
-                    break;
-                }
-                case 'Z': // ReadyForQuery
-                {
-                    pg.input.readReadyForQuery();
-                    break CLOSE_LOOP;
-                }
-                default: {
-                    throw new IllegalStateException(String.format("protocol violation while closing query, did not expect '%s'", type));
-                }
-            }
-        }
+        pg.closeQuery(statementId);
     }
 }

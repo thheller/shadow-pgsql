@@ -8,8 +8,6 @@ import java.util.List;
  * Created by zilence on 12.08.14.
  */
 public class PreparedQuery extends AbstractStatement {
-    private int portalId = 0;
-
     protected final Query query;
     protected final ColumnInfo[] columnInfos;
     protected final TypeHandler[] typeDecoders;
@@ -26,26 +24,12 @@ public class PreparedQuery extends AbstractStatement {
         this.rowBuilder = rowBuilder;
     }
 
-    public Object execute(Object... queryParams) throws IOException {
-        return execute(resultBuilder, rowBuilder, Arrays.asList(queryParams));
+    public Object executeWith(Object... params) throws IOException {
+        return execute(Arrays.asList(params));
     }
 
     public Object execute(final List queryParams) throws IOException {
-        if (queryParams.size() != typeEncoders.length) {
-            throw new IllegalArgumentException(String.format("Not enough Params provided to Statement, expected %d got %d", typeEncoders.length, queryParams.size()));
-        }
-
-        pg.checkReady();
-        pg.output.checkReset();
-        pg.state = ConnectionState.QUERY_RESULT;
-
-        // flow -> B/E/H
-
-        writeBind(typeDecoders, queryParams, null);
-        writeExecute(null, 0);
-        writeSync();
-
-        pg.output.flushAndReset();
+        executeWithParams(typeDecoders, queryParams);
 
         Object queryResult = resultBuilder.init();
 
@@ -136,6 +120,5 @@ public class PreparedQuery extends AbstractStatement {
 
         return resultBuilder.complete(queryResult);
     }
-
 
 }

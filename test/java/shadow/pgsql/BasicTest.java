@@ -4,6 +4,7 @@ import org.junit.*;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -51,8 +52,35 @@ public class BasicTest {
     }
 
     @Test
-    public void testSimpleQuery() throws IOException {
-        List<Map<String, Object>> results = (List<Map<String, Object>>) pg.executeQuery("SELECT * FROM num_types");
-        System.out.println("yo");
+    public void testBasicError() throws IOException {
+        try {
+            pg.executeQuery("SELECT * FROM unknown_table");
+
+            fail("Table doesn't exist");
+        } catch (CommandException e) {
+        }
+
+        pg.checkReady();
+
+        try {
+            pg.prepareQuery(new SimpleQuery("INSERT INTO num_types VALUES ($1)"));
+
+            fail("Not a Query");
+        } catch (CommandException e) {
+        }
+
+
+        try (PreparedQuery q = pg.prepareQuery(new SimpleQuery("SELECT * FROM num_types WHERE id = $1"))) {
+            try {
+                q.execute(Arrays.asList("test"));
+
+                fail("Illegal Argument! Not an int.");
+            } catch (IllegalArgumentException e) {
+            }
+
+            pg.checkReady();
+        }
+
+        pg.checkReady();
     }
 }

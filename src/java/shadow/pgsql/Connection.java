@@ -73,6 +73,8 @@ public class Connection implements AutoCloseable {
 
         this.state = ConnectionState.START_UP;
 
+        Map<String, String> errorData = null;
+
         // read until ReadyForQuery
         STARTUP_LOOP:
         while (true) {
@@ -113,10 +115,12 @@ public class Connection implements AutoCloseable {
                     final int processId = input.readInt32();
                     final int secretKey = input.readInt32();
 
+                    // FIXME: store this somewhere, needed for query cancel
                     break;
                 }
                 case 'E': {
-                    throw input.readErrorAndMakeException("STARTUP");
+                    errorData = input.readErrorData();
+                    break;
                 }
                 case 'Z': {
                     input.readReadyForQuery();
@@ -125,6 +129,10 @@ public class Connection implements AutoCloseable {
                 default:
                     throw new IllegalStateException(String.format("illegal protocol message during startup: %s\n", (char) type));
             }
+        }
+
+        if (errorData != null) {
+            throw new CommandException("Error during startup", errorData);
         }
 
         // startup complete, ready for query
@@ -224,6 +232,8 @@ public class Connection implements AutoCloseable {
 
         // success flow usually is 1/t/n/Z
 
+        Map<String, String> errorData = null;
+
         PREPARE_LOOP:
         while (true) {
             final char type = input.readNextCommand();
@@ -255,28 +265,42 @@ public class Connection implements AutoCloseable {
                 }
                 case 'E': // Error
                 {
-                    throw input.readErrorAndMakeException(query.getSQLString());
+                    errorData = input.readErrorData();
+                    break;
                 }
                 default:
                     throw new IllegalStateException(String.format("protocol violation, received '%s' after Parse", type));
             }
         }
 
-        // FIXME: check if we got NoData?
-        if (!parsed || paramInfo == null) {
-            throw new IllegalStateException("backend did not send ParseComplete, ParameterDescription");
-        }
-
-        final TypeHandler[] encoders = new TypeHandler[paramInfo.length];
-        for (int i = 0; i < encoders.length; i++) {
-            if (typeHints.size() > i) {
-                encoders[i] = typeHints.get(i);
-            } else {
-                encoders[i] = query.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
+        if (errorData != null) {
+            if (parsed) {
+                throw new IllegalStateException("Error but Parsed!");
             }
+            throw new CommandException(String.format("Failed to prepare Statement: %s", query.getSQLString()), errorData);
         }
 
-        return new PreparedStatement(this, statementId, encoders, query);
+        try {
+            // FIXME: check if we got NoData?
+            if (!parsed || paramInfo == null) {
+                throw new IllegalStateException("backend did not send ParseComplete, ParameterDescription");
+            }
+
+            final TypeHandler[] encoders = new TypeHandler[paramInfo.length];
+            for (int i = 0; i < encoders.length; i++) {
+                if (typeHints.size() > i) {
+                    encoders[i] = typeHints.get(i);
+                } else {
+                    encoders[i] = query.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
+                }
+            }
+
+            return new PreparedStatement(this, statementId, encoders, query);
+        } catch (Exception e) {
+            // FIXME: this might also throw!
+            closeQuery(statementId);
+            throw e;
+        }
     }
 
     public PreparedQuery prepareQuery(Query query) throws IOException {
@@ -290,6 +314,8 @@ public class Connection implements AutoCloseable {
         boolean parsed = false;
 
         // success flow usually is 1/t/T/Z
+        Map<String, String> errorData = null;
+        boolean noData = false;
 
         PREPARE_LOOP:
         while (true) {
@@ -322,42 +348,63 @@ public class Connection implements AutoCloseable {
                 }
                 case 'E': // Error
                 {
-                    throw input.readErrorAndMakeException(query.getSQLString());
+                    errorData = input.readErrorData();
+                    break;
                 }
                 case 'n': // NoData
                 {
-                    // FIXME: cleanup!
-                    throw new IllegalStateException("Query does not return result, did you mean prepare?");
+                    final int size = input.readInt32();
+                    noData = true;
+                    break;
                 }
                 default:
                     throw new IllegalStateException(String.format("protocol violation, received '%s' after Parse", type));
             }
         }
 
-        if (!parsed || paramInfo == null || columnInfos == null) {
-            throw new IllegalStateException("backend did not send ParseComplete, ParameterDescription and RowDescription");
-        }
-
-        final TypeHandler[] encoders = new TypeHandler[paramInfo.length];
-        for (int i = 0; i < encoders.length; i++) {
-            if (typeHints.size() > i) {
-                encoders[i] = typeHints.get(i);
-            } else {
-                encoders[i] = query.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
+        if (errorData != null) {
+            // FIXME: I don't assume this will happen.
+            if (parsed) {
+                throw new IllegalStateException("Error but Parsed!");
             }
+
+            throw new CommandException(String.format("Failed to prepare Query: %s", query.getSQLString()), errorData);
         }
 
-        RowBuilder rowBuilder = query.createRowBuilder(columnInfos);
-        ResultBuilder resultBuilder = query.createResultBuilder(columnInfos);
+        try {
+            if (noData) {
+                throw new CommandException("Query does not return data, use a Statement");
+            }
 
-        TypeHandler[] decoders = new TypeHandler[columnInfos.length];
+            if (!parsed || paramInfo == null || columnInfos == null) {
+                throw new IllegalStateException("backend did not send ParseComplete, ParameterDescription and RowDescription");
+            }
 
-        for (int i = 0; i < columnInfos.length; i++) {
-            ColumnInfo f = columnInfos[i];
-            decoders[i] = query.getTypeRegistry().getTypeHandlerForField(db, f);
+            final TypeHandler[] encoders = new TypeHandler[paramInfo.length];
+            for (int i = 0; i < encoders.length; i++) {
+                if (typeHints.size() > i) {
+                    encoders[i] = typeHints.get(i);
+                } else {
+                    encoders[i] = query.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
+                }
+            }
+
+            RowBuilder rowBuilder = query.createRowBuilder(columnInfos);
+            ResultBuilder resultBuilder = query.createResultBuilder(columnInfos);
+
+            TypeHandler[] decoders = new TypeHandler[columnInfos.length];
+
+            for (int i = 0; i < columnInfos.length; i++) {
+                ColumnInfo f = columnInfos[i];
+                decoders[i] = query.getTypeRegistry().getTypeHandlerForField(db, f);
+            }
+
+            return new PreparedQuery(this, statementId, encoders, query, columnInfos, decoders, resultBuilder, rowBuilder);
+        } catch (Exception e) {
+            // FIXME: this might also throw
+            closeQuery(statementId);
+            throw e;
         }
-
-        return new PreparedQuery(this, statementId, encoders, query, columnInfos, decoders, resultBuilder, rowBuilder);
     }
 
     private void writeParseDescribeSync(String query, List<TypeHandler> typeHints, String statementId) throws IOException {
@@ -400,5 +447,61 @@ public class Connection implements AutoCloseable {
         input.close();
         socket.close();
 
+    }
+
+    public void closeQuery(String statementId) throws IOException {
+        output.checkReset();
+        state = ConnectionState.QUERY_CLOSE;
+
+        // Close
+        output.beginCommand('C');
+        output.int8((byte) 'S');
+        output.string(statementId);
+        output.complete();
+
+        // Sync
+        output.simpleCommand('S');
+        output.flushAndReset();
+
+        Map<String, String> errorData = null;
+        boolean closed = false;
+
+        // CloseComplete + Ready
+        CLOSE_LOOP:
+        while (true) {
+            final char type = input.readNextCommand();
+            switch (type) {
+                case '3': // CloseComplete
+                {
+                    final int size = input.readInt32();
+                    if (size != 4) {
+                        throw new IllegalStateException(String.format("CloseComplete should be size 4 (was %d)", size));
+                    }
+                    closed = true;
+                    break;
+                }
+                case 'E':
+                {
+                    errorData = input.readErrorData();
+                    break;
+                }
+                case 'Z': // ReadyForQuery
+                {
+                    input.readReadyForQuery();
+                    break CLOSE_LOOP;
+                }
+                default: {
+                    throw new IllegalStateException(String.format("protocol violation while closing query, did not expect '%s'", type));
+                }
+            }
+        }
+
+        if (errorData != null) {
+            throw new CommandException("Failed to close Statement", errorData);
+        }
+
+        if (!closed) {
+            throw new IllegalStateException("Close didn't Close!");
+        }
     }
 }

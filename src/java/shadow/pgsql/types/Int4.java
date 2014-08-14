@@ -39,7 +39,7 @@ public class Int4 implements TypeHandler {
         } else if (param instanceof Short) {
             output.int32(((Short) param).intValue());
         } else {
-            throw new IllegalArgumentException(String.format("Unsupported int2 type: %s [%s]", param.getClass().getName(), param.toString()));
+            throw new IllegalArgumentException(String.format("Unsupported int4 type: %s", param.getClass().getName()));
         }
     }
 

@@ -24,7 +24,7 @@ public class PreparedStatement extends AbstractStatement {
 
     public StatementResult execute(List queryParams) throws IOException {
         // flow -> B/E/S
-        writeBindExecuteSync(NO_COLUMNS, queryParams, null, 0);
+        executeWithParams(NO_COLUMNS, queryParams);
 
         // flow <- 2/C/Z
         return pg.input.readStatementResult();

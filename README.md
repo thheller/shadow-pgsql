@@ -25,7 +25,7 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 - more Types
 - UTF-8 is hardcoded right now, things will go wrong if backend is not UTF-8
 - Tests
-- better Error Handling & Recovery (none right now)
+- better Error Handling (especially arround Types)
 - Docs
 - SSL & Auth Support
 - Generics (didn't write any serious Java for over 10 years, need to learn Generics first)

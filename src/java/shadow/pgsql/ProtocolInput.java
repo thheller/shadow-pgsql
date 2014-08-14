@@ -47,14 +47,9 @@ public class ProtocolInput {
         }
     }
 
-    CommandException readErrorAndMakeException(String causeByQuery) throws IOException {
+    Map<String, String> readErrorData() throws IOException {
         final int size = stream.readInt();
-
-        final Map<String, String> errorData = readMessages();
-
-        pg.state = ConnectionState.ERROR;
-
-        return new CommandException(causeByQuery, errorData);
+        return readMessages();
     }
 
     //

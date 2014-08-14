@@ -107,6 +107,7 @@ public class ProtocolOutput {
     }
 
     void reset() {
+        this.marks.clear();
         this.position = 0;
     }
 
