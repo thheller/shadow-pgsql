@@ -11,8 +11,8 @@ public interface TypeHandler {
     public boolean supportsBinary();
 
     public void encodeBinary(Connection con, ProtocolOutput output, Object param);
-    public String encodeToString(Connection con, Object param);
-
     Object decodeBinary(Connection con, ColumnInfo field, int colSize) throws IOException;
+
+    public String encodeToString(Connection con, Object param);
     Object decodeString(Connection con, ColumnInfo field, String value);
 }

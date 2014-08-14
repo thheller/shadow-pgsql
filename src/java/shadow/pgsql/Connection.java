@@ -41,6 +41,11 @@ public class Connection implements AutoCloseable {
         this.state = ConnectionState.CONNECTED;
     }
 
+
+    public String getParameterValue(String key) {
+        return this.parameters.get(key);
+    }
+
     public void handleNotice(Map<String, String> notice) {
         // FIXME: delegate to database or some interface
         System.out.format("NOTICE: %s", notice.toString());
@@ -212,7 +217,7 @@ public class Connection implements AutoCloseable {
 
     public StatementResult execute(String statement, Object... params) throws IOException {
         try (PreparedStatement stmt = prepare(new SimpleStatement(statement))) {
-            return stmt.execute(params);
+            return stmt.executeWith(params);
         }
     }
 

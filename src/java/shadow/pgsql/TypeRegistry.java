@@ -73,7 +73,9 @@ public class TypeRegistry {
                 Numeric.INSTANCE,
                 Text.NAME,
                 Text.TEXT,
-                Text.VARCHAR
+                Text.VARCHAR,
+                DateTime.TIMESTAMP,
+                DateTime.TIMESTAMPTZ
         };
 
         for (TypeHandler t : defaults) {

@@ -1,10 +1,16 @@
 package shadow.pgsql;
 
-import org.junit.*;
-import static org.junit.Assert.*;
+import org.junit.After;
+import org.junit.Before;
+import org.junit.Test;
 
 import java.io.IOException;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.List;
+
+import static org.junit.Assert.*;
 
 /**
  * alright ... this is a very basic test.
@@ -19,6 +25,7 @@ public class BasicTest {
         this.pg = db.connect();
 
         pg.execute("DELETE FROM num_types");
+        pg.execute("DELETE FROM timestamp_types");
     }
 
     @After
@@ -31,11 +38,11 @@ public class BasicTest {
         pg.begin();
 
         try (PreparedStatement stmt = pg.prepare("INSERT INTO num_types (fint8) VALUES ($1)")) {
-            stmt.execute(1);
+            stmt.executeWith(1);
             Savepoint savepoint = pg.savepoint();
-            stmt.execute(2);
+            stmt.executeWith(2);
             savepoint.rollback();
-            stmt.execute(3);
+            stmt.executeWith(3);
         }
 
         pg.commit();
@@ -82,5 +89,42 @@ public class BasicTest {
         }
 
         pg.checkReady();
+    }
+
+    public void roundtripOffsetDateTime(PreparedQuery pq, OffsetDateTime obj) throws IOException {
+        OffsetDateTime result = (OffsetDateTime) pq.executeWith(obj);
+        assertTrue(obj.isEqual(result));
+    }
+
+    @Test
+    public void testTimestampTz() throws IOException {
+        SimpleQuery q = new SimpleQuery("INSERT INTO timestamp_types (ftimestamptz) VALUES ($1) RETURNING ftimestamptz");
+        q.setRowBuilder(Helpers.SINGLE_COLUMN);
+        q.setResultBuilder(Helpers.SINGLE_ROW);
+
+        try (PreparedQuery pq = pg.prepareQuery(q)) {
+            roundtripOffsetDateTime(pq, OffsetDateTime.now());
+            roundtripOffsetDateTime(pq, OffsetDateTime.of(2014, 1, 1, 1, 1, 1, 0, ZoneOffset.of("-06:00")));
+            roundtripOffsetDateTime(pq, OffsetDateTime.of(2014, 1, 1, 1, 1, 1, 0, ZoneOffset.of("+06:00")));
+            roundtripOffsetDateTime(pq, OffsetDateTime.of(2014, 1, 1, 1, 1, 1, 0, ZoneOffset.of("Z")));
+        }
+    }
+
+    public void roundtripLocalDateTime(PreparedQuery pq, LocalDateTime obj) throws IOException {
+        LocalDateTime result = (LocalDateTime) pq.executeWith(obj);
+        assertTrue(obj.isEqual(result));
+    }
+
+    @Test
+    public void testTimestamp() throws IOException {
+        SimpleQuery q = new SimpleQuery("INSERT INTO timestamp_types (ftimestamp) VALUES ($1) RETURNING ftimestamp");
+        q.setRowBuilder(Helpers.SINGLE_COLUMN);
+        q.setResultBuilder(Helpers.SINGLE_ROW);
+
+        try (PreparedQuery pq = pg.prepareQuery(q)) {
+            roundtripLocalDateTime(pq, LocalDateTime.now()); // will most likely have a fractional second
+            roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 0)); // test without fractional second
+            roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 999000000)); // pg only has millis, no nanos
+        }
     }
 }

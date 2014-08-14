@@ -22,6 +22,10 @@ public class PreparedStatement extends PreparedBase {
         return statement;
     }
 
+    public StatementResult executeWith(Object... queryParams) throws IOException {
+        return execute(Arrays.asList(queryParams));
+    }
+
     public StatementResult execute(List queryParams) throws IOException {
         // flow -> B/E/S
         executeWithParams(NO_COLUMNS, queryParams);
@@ -30,8 +34,5 @@ public class PreparedStatement extends PreparedBase {
         return pg.input.readStatementResult();
     }
 
-    public StatementResult execute(Object... queryParams) throws IOException {
-        return execute(Arrays.asList(queryParams));
-    }
 
 }

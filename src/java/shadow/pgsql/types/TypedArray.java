@@ -16,6 +16,10 @@ public class TypedArray implements TypeHandler {
     private final ArrayReader arrayReader;
 
     public TypedArray(TypeHandler itemType, ArrayReader arrayReader) {
+        if (!itemType.supportsBinary()) {
+            throw new IllegalArgumentException("only binary arrays implemented");
+        }
+
         this.itemType = itemType;
         this.arrayReader = arrayReader;
     }
@@ -72,7 +76,7 @@ public class TypedArray implements TypeHandler {
 
             return arrayReader.complete(result);
         } else {
-            throw new AbstractMethodError("FIXME: implement 2-dim array");
+            throw new UnsupportedOperationException("FIXME: implement 2-dim array");
         }
     }
 
