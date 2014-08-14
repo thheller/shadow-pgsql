@@ -8,29 +8,39 @@ import java.util.List;
  */
 public class SimpleQuery implements Query {
 
-    private final String statement;
+    private final String sql;
+
     private final List<TypeHandler> parameterTypes;
     private ResultBuilder resultBuilder;
     private RowBuilder rowBuilder;
+    private TypeRegistry typeRegistry = TypeRegistry.DEFAULT;
 
-    public SimpleQuery(String statement) {
-        this(statement, new ArrayList<>());
+    public SimpleQuery(String sql) {
+        this(sql, new ArrayList<>());
     }
 
-    public SimpleQuery(String statement, List<TypeHandler> typeHandlers) {
-        this(statement, typeHandlers, Handlers.RESULT_AS_LIST, Handlers.ROW_AS_MAP);
+    public SimpleQuery(String sql, List<TypeHandler> typeHandlers) {
+        this(sql, typeHandlers, Handlers.RESULT_AS_LIST, Handlers.ROW_AS_MAP);
     }
 
-    public SimpleQuery(String statement, List<TypeHandler> parameterTypes, ResultBuilder resultBuilder, RowBuilder rowBuilder) {
-        this.statement = statement;
+    public SimpleQuery(String sql, List<TypeHandler> parameterTypes, ResultBuilder resultBuilder, RowBuilder rowBuilder) {
+        this.sql = sql;
         this.parameterTypes = parameterTypes;
         this.resultBuilder = resultBuilder;
         this.rowBuilder = rowBuilder;
     }
 
+    public TypeRegistry getTypeRegistry() {
+        return typeRegistry;
+    }
+
+    public void setTypeRegistry(TypeRegistry typeRegistry) {
+        this.typeRegistry = typeRegistry;
+    }
+
     @Override
-    public String getStatement() {
-        return statement;
+    public String getSQLString() {
+        return sql;
     }
 
     @Override

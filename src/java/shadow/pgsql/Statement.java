@@ -3,10 +3,12 @@ package shadow.pgsql;
 import java.util.List;
 
 /**
- * Created by zilence on 12.08.14.
+ * Statement is a SQL Statement that does not return data, only a "Tag"
  */
 public interface Statement {
-    String getStatement();
+    String getSQLString();
 
     List<TypeHandler> getParameterTypes();
+
+    TypeRegistry getTypeRegistry();
 }

@@ -10,9 +10,19 @@ public class SimpleStatement implements Statement {
     private final String sql;
     private final List<TypeHandler> parameterTypes;
 
+    private TypeRegistry typeRegistry = TypeRegistry.DEFAULT;
+
     public SimpleStatement(String sql, List<TypeHandler> parameterTypes) {
         this.sql = sql;
         this.parameterTypes = parameterTypes;
+    }
+
+    public TypeRegistry getTypeRegistry() {
+        return typeRegistry;
+    }
+
+    public void setTypeRegistry(TypeRegistry typeRegistry) {
+        this.typeRegistry = typeRegistry;
     }
 
     public SimpleStatement(String sql) {
@@ -20,7 +30,7 @@ public class SimpleStatement implements Statement {
     }
 
     @Override
-    public String getStatement() {
+    public String getSQLString() {
         return sql;
     }
 

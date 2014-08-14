@@ -217,7 +217,7 @@ public class Connection implements AutoCloseable {
 
         final String statementId = String.format("s%d", queryId++);
 
-        writeParseDescribeSync(query.getStatement(), typeHints, statementId);
+        writeParseDescribeSync(query.getSQLString(), typeHints, statementId);
 
         int[] paramInfo = null;
         boolean parsed = false;
@@ -255,7 +255,7 @@ public class Connection implements AutoCloseable {
                 }
                 case 'E': // Error
                 {
-                    throw input.readErrorAndMakeException(query.getStatement());
+                    throw input.readErrorAndMakeException(query.getSQLString());
                 }
                 default:
                     throw new IllegalStateException(String.format("protocol violation, received '%s' after Parse", type));
@@ -272,7 +272,7 @@ public class Connection implements AutoCloseable {
             if (typeHints.size() > i) {
                 encoders[i] = typeHints.get(i);
             } else {
-                encoders[i] = db.getTypeHandlerForOid(paramInfo[i]);
+                encoders[i] = query.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
             }
         }
 
@@ -283,7 +283,7 @@ public class Connection implements AutoCloseable {
         final List<TypeHandler> typeHints = query.getParameterTypes();
 
         final String statementId = String.format("s%d", queryId++);
-        writeParseDescribeSync(query.getStatement(), typeHints, statementId);
+        writeParseDescribeSync(query.getSQLString(), typeHints, statementId);
 
         int[] paramInfo = null;
         ColumnInfo[] columnInfos = null;
@@ -322,7 +322,7 @@ public class Connection implements AutoCloseable {
                 }
                 case 'E': // Error
                 {
-                    throw input.readErrorAndMakeException(query.getStatement());
+                    throw input.readErrorAndMakeException(query.getSQLString());
                 }
                 case 'n': // NoData
                 {
@@ -343,7 +343,7 @@ public class Connection implements AutoCloseable {
             if (typeHints.size() > i) {
                 encoders[i] = typeHints.get(i);
             } else {
-                encoders[i] = db.getTypeHandlerForOid(paramInfo[i]);
+                encoders[i] = query.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
             }
         }
 
@@ -354,7 +354,7 @@ public class Connection implements AutoCloseable {
 
         for (int i = 0; i < columnInfos.length; i++) {
             ColumnInfo f = columnInfos[i];
-            decoders[i] = db.getTypeHandlerForField(f);
+            decoders[i] = query.getTypeRegistry().getTypeHandlerForField(db, f);
         }
 
         return new PreparedQuery(this, statementId, encoders, query, columnInfos, decoders, resultBuilder, rowBuilder);

@@ -3,12 +3,14 @@ package shadow.pgsql;
 import java.util.List;
 
 /**
- * Created by zilence on 12.08.14.
+ * Query represents an SQL Statement that returns zero or more rows of data.
  */
 public interface Query<RESULT> {
-    String getStatement();
+    String getSQLString();
 
     List<TypeHandler> getParameterTypes();
+
+    TypeRegistry getTypeRegistry();
 
     ResultBuilder<?, RESULT, ?> createResultBuilder(ColumnInfo[] columns);
 
