@@ -8,7 +8,7 @@ import java.util.Map;
 /**
  * Created by zilence on 10.08.14.
  */
-public class Handlers {
+public class Helpers {
     public static final ResultBuilder RESULT_AS_LIST = new ResultBuilder<List, List, Object>() {
         @Override
         public List init() {

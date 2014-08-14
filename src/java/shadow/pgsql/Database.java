@@ -1,6 +1,5 @@
 package shadow.pgsql;
 
-import shadow.pgsql.types.*;
 import shadow.pgsql.utils.RowProcessor;
 
 import java.io.IOException;
@@ -72,7 +71,7 @@ public class Database {
         // fetch schema related things
 
         SimpleQuery pg_types = new SimpleQuery("SELECT oid, typname FROM pg_type");
-        pg_types.setRowBuilder(Handlers.ROW_AS_LIST);
+        pg_types.setRowBuilder(Helpers.ROW_AS_LIST);
         pg_types.setResultBuilder(
                 new RowProcessor<List>() {
                     @Override
@@ -103,7 +102,7 @@ public class Database {
                         " AND b.relname NOT LIKE 'sql_%'"
         );
 
-        schema.setRowBuilder(Handlers.ROW_AS_LIST);
+        schema.setRowBuilder(Helpers.ROW_AS_LIST);
         schema.setResultBuilder(
                 new RowProcessor<List>() {
                     @Override

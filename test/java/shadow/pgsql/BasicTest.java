@@ -4,9 +4,7 @@ import org.junit.*;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 
 /**
  * alright ... this is a very basic test.
@@ -43,7 +41,7 @@ public class BasicTest {
         pg.commit();
 
         SimpleQuery query = new SimpleQuery("SELECT fint8 FROM num_types");
-        query.setRowBuilder(Handlers.SINGLE_COLUMN);
+        query.setRowBuilder(Helpers.SINGLE_COLUMN);
 
         List numTypes = (List) pg.executeQuery(query);
         assertTrue(numTypes.contains(1l));
@@ -72,11 +70,13 @@ public class BasicTest {
 
         try (PreparedQuery q = pg.prepareQuery(new SimpleQuery("SELECT * FROM num_types WHERE id = $1"))) {
             try {
-                q.execute(Arrays.asList("test"));
+                q.executeWith("test");
 
                 fail("Illegal Argument! Not an int.");
             } catch (IllegalArgumentException e) {
             }
+
+            q.executeWith(1);
 
             pg.checkReady();
         }

@@ -7,7 +7,7 @@ import java.util.List;
 /**
  * Created by zilence on 12.08.14.
  */
-public class PreparedQuery extends AbstractStatement {
+public class PreparedQuery extends PreparedBase {
     protected final Query query;
     protected final ColumnInfo[] columnInfos;
     protected final TypeHandler[] typeDecoders;
@@ -46,19 +46,6 @@ public class PreparedQuery extends AbstractStatement {
                         throw new IllegalStateException("BindComplete was not size 4 (was %d)");
                     }
                     break;
-                }
-                case 's': // PortalSuspended
-                {
-                    throw new UnsupportedOperationException("needs more thought as this is only supported in transactions");
-                    /*
-                    final int size = pg.input.readInt32();
-
-                    pg.output.checkReset();
-                    this.writeExecute(null, 0);
-                    this.writeSync();
-                    pg.output.flushAndReset();
-                    break;
-                    */
                 }
                 case 'D':  // DataRow
                 {

@@ -6,13 +6,13 @@ import java.util.List;
 /**
  * Created by zilence on 09.08.14.
  */
-public abstract class AbstractStatement implements AutoCloseable {
+public abstract class PreparedBase implements AutoCloseable {
     protected final Connection pg;
     protected final String statementId;
 
     protected final TypeHandler[] typeEncoders;
 
-    protected AbstractStatement(Connection pg, String statementId, TypeHandler[] typeEncoders) {
+    protected PreparedBase(Connection pg, String statementId, TypeHandler[] typeEncoders) {
         this.pg = pg;
         this.statementId = statementId;
         this.typeEncoders = typeEncoders;
@@ -72,11 +72,6 @@ public abstract class AbstractStatement implements AutoCloseable {
         pg.output.string(portalId); // portal name
         pg.output.int32(limit); // max rows, zero = no limit
         pg.output.complete();
-    }
-
-    protected void writeFlush() {
-        // Flush
-        pg.output.simpleCommand('H');
     }
 
     protected void writeSync() {

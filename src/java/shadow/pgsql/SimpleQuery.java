@@ -20,7 +20,7 @@ public class SimpleQuery implements Query {
     }
 
     public SimpleQuery(String sql, List<TypeHandler> typeHandlers) {
-        this(sql, typeHandlers, Handlers.RESULT_AS_LIST, Handlers.ROW_AS_MAP);
+        this(sql, typeHandlers, Helpers.RESULT_AS_LIST, Helpers.ROW_AS_MAP);
     }
 
     public SimpleQuery(String sql, List<TypeHandler> parameterTypes, ResultBuilder resultBuilder, RowBuilder rowBuilder) {

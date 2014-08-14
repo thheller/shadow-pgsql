@@ -9,7 +9,7 @@ import java.util.List;
  *
  * @author Thomas Heller
  */
-public class PreparedStatement extends AbstractStatement {
+public class PreparedStatement extends PreparedBase {
     private final static TypeHandler[] NO_COLUMNS = new TypeHandler[0];
     private final Statement statement;
 

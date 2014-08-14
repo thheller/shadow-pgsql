@@ -216,16 +216,16 @@ public class Connection implements AutoCloseable {
         }
     }
 
-    public PreparedStatement prepare(String query) throws IOException {
-        return prepare(new SimpleStatement(query));
+    public PreparedStatement prepare(String statement) throws IOException {
+        return prepare(new SimpleStatement(statement));
     }
 
-    public PreparedStatement prepare(Statement query) throws IOException {
-        final List<TypeHandler> typeHints = query.getParameterTypes();
+    public PreparedStatement prepare(Statement statement) throws IOException {
+        final List<TypeHandler> typeHints = statement.getParameterTypes();
 
         final String statementId = String.format("s%d", queryId++);
 
-        writeParseDescribeSync(query.getSQLString(), typeHints, statementId);
+        writeParseDescribeSync(statement.getSQLString(), typeHints, statementId);
 
         int[] paramInfo = null;
         boolean parsed = false;
@@ -277,7 +277,7 @@ public class Connection implements AutoCloseable {
             if (parsed) {
                 throw new IllegalStateException("Error but Parsed!");
             }
-            throw new CommandException(String.format("Failed to prepare Statement: %s", query.getSQLString()), errorData);
+            throw new CommandException(String.format("Failed to prepare Statement: %s", statement.getSQLString()), errorData);
         }
 
         try {
@@ -291,11 +291,11 @@ public class Connection implements AutoCloseable {
                 if (typeHints.size() > i) {
                     encoders[i] = typeHints.get(i);
                 } else {
-                    encoders[i] = query.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
+                    encoders[i] = statement.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
                 }
             }
 
-            return new PreparedStatement(this, statementId, encoders, query);
+            return new PreparedStatement(this, statementId, encoders, statement);
         } catch (Exception e) {
             // FIXME: this might also throw!
             closeQuery(statementId);
