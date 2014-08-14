@@ -5,9 +5,12 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.*;
@@ -26,6 +29,7 @@ public class BasicTest {
 
         pg.execute("DELETE FROM num_types");
         pg.execute("DELETE FROM timestamp_types");
+        pg.execute("DELETE FROM array_types");
     }
 
     @After
@@ -98,17 +102,14 @@ public class BasicTest {
 
     @Test
     public void testTimestampTz() throws IOException {
-        SimpleQuery q = new SimpleQuery("INSERT INTO timestamp_types (ftimestamptz) VALUES ($1) RETURNING ftimestamptz");
-        q.setRowBuilder(Helpers.SINGLE_COLUMN);
-        q.setResultBuilder(Helpers.SINGLE_ROW);
-
-        try (PreparedQuery pq = pg.prepareQuery(q)) {
+        try (PreparedQuery pq = roundtripQuery("timestamp_types", "ftimestamptz")) {
             roundtripOffsetDateTime(pq, OffsetDateTime.now());
             roundtripOffsetDateTime(pq, OffsetDateTime.of(2014, 1, 1, 1, 1, 1, 0, ZoneOffset.of("-06:00")));
             roundtripOffsetDateTime(pq, OffsetDateTime.of(2014, 1, 1, 1, 1, 1, 0, ZoneOffset.of("+06:00")));
             roundtripOffsetDateTime(pq, OffsetDateTime.of(2014, 1, 1, 1, 1, 1, 0, ZoneOffset.of("Z")));
         }
     }
+
 
     public void roundtripLocalDateTime(PreparedQuery pq, LocalDateTime obj) throws IOException {
         LocalDateTime result = (LocalDateTime) pq.executeWith(obj);
@@ -117,14 +118,74 @@ public class BasicTest {
 
     @Test
     public void testTimestamp() throws IOException {
-        SimpleQuery q = new SimpleQuery("INSERT INTO timestamp_types (ftimestamp) VALUES ($1) RETURNING ftimestamp");
+        try (PreparedQuery pq = roundtripQuery("timestamp_types", "ftimestamp")) {
+            roundtripLocalDateTime(pq, LocalDateTime.now()); // will most likely have a fractional second
+            roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 0)); // test without fractional second
+            roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 999000000)); // pg default has 3 digit millis, no nanos
+        }
+    }
+
+    public void roundtripLocalDate(PreparedQuery pq, LocalDate obj) throws IOException {
+        LocalDate result = (LocalDate) pq.executeWith(obj);
+        assertTrue(obj.isEqual(result));
+    }
+
+    @Test
+    public void testDate() throws IOException {
+        try (PreparedQuery pq = roundtripQuery("timestamp_types", "fdate")) {
+            roundtripLocalDate(pq, LocalDate.now());
+        }
+    }
+
+    public PreparedQuery roundtripQuery(String table, String field) throws IOException {
+        SimpleQuery q = new SimpleQuery(String.format("INSERT INTO %s (%s) VALUES ($1) RETURNING %s", table, field, field));
         q.setRowBuilder(Helpers.SINGLE_COLUMN);
         q.setResultBuilder(Helpers.SINGLE_ROW);
 
-        try (PreparedQuery pq = pg.prepareQuery(q)) {
-            roundtripLocalDateTime(pq, LocalDateTime.now()); // will most likely have a fractional second
-            roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 0)); // test without fractional second
-            roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 999000000)); // pg only has millis, no nanos
+        return pg.prepareQuery(q);
+    }
+
+    @Test
+    public void testInt2Array() throws IOException {
+        try (PreparedQuery pq = roundtripQuery("array_types", "aint2")) {
+            short[] send = new short[] {1,2,3};
+            short[] recv = (short[]) pq.executeWith(send);
+            assertArrayEquals(send, recv);
+        }
+    }
+
+    @Test
+    public void testInt4Array() throws IOException {
+        try (PreparedQuery pq = roundtripQuery("array_types", "aint4")) {
+            int[] send = new int[] {1,2,3};
+            int[] recv = (int[]) pq.executeWith(send);
+
+            assertArrayEquals(send, recv);
+        }
+    }
+
+    @Test
+    public void testInt8Array() throws IOException {
+        try (PreparedQuery pq = roundtripQuery("array_types", "aint8")) {
+            long[] send = new long[] {1,2,3};
+            long[] recv = (long[]) pq.executeWith(send);
+
+            assertArrayEquals(send, recv);
+        }
+    }
+
+    @Test
+    public void testTextArray() throws IOException {
+        try (PreparedQuery pq = roundtripQuery("array_types", "atext")) {
+            String[] send = new String[] {"1","2","3"};
+
+            // lol varargs ...
+            List params = new ArrayList();
+            params.add(send);
+
+            String[] recv = (String[]) pq.execute(params);
+
+            assertArrayEquals(send, recv);
         }
     }
 }

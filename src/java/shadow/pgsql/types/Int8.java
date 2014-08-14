@@ -11,15 +11,15 @@ import java.io.IOException;
  * Created by zilence on 10.08.14.
  */
 public class Int8 implements TypeHandler {
-    public static final int OID = 20;
-    public static final Int8 INSTANCE = new Int8();
+    private final int oid;
 
-    Int8() {
+    public Int8(int oid) {
+        this.oid = oid;
     }
 
     @Override
     public int getTypeOid() {
-        return OID;
+        return oid;
     }
 
     @Override

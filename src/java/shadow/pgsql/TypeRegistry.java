@@ -65,17 +65,23 @@ public class TypeRegistry {
         Builder b = new Builder();
 
         TypeHandler[] defaults = new TypeHandler[]{
-                Int2.INSTANCE,
-                Int4.INSTANCE,
-                Int8.INSTANCE,
-                Int4.INSTANCE,
-                Int4.OID,
-                Numeric.INSTANCE,
-                Text.NAME,
-                Text.TEXT,
-                Text.VARCHAR,
-                DateTime.TIMESTAMP,
-                DateTime.TIMESTAMPTZ
+                Types.INT2,
+                Types.INT2_ARRAY,
+                Types.INT4,
+                Types.INT4_ARRAY,
+                Types.INT8,
+                Types.INT8_ARRAY,
+                Types.INT4,
+                Types.OID,
+                Types.NUMERIC,
+                Types.NAME,
+                Types.TEXT,
+                Types.TEXT_ARRAY,
+                Types.VARCHAR,
+                Types.VARCHAR_ARRAY,
+                Types.TIMESTAMP,
+                Types.TIMESTAMPTZ,
+                Types.DATE
         };
 
         for (TypeHandler t : defaults) {

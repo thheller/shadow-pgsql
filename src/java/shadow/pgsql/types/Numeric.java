@@ -13,7 +13,6 @@ import java.math.BigDecimal;
  */
 public class Numeric implements TypeHandler {
     public static final int OID = 1700;
-    public static final Numeric INSTANCE = new Numeric();
 
     Numeric() {
     }
@@ -41,14 +40,11 @@ public class Numeric implements TypeHandler {
     @Override
     public Object decodeBinary(Connection con, ColumnInfo field, int colSize) throws IOException {
         // FIXME: I HAVE NO IDEA WHAT I'M DOING!
-        // this can't be right ... do I really need a String?
 
         final int ndigits = con.input.stream.readShort();
         final int weight = con.input.stream.readShort(); // what does this mean?
         final int sign = con.input.stream.readShort();
         final int rscale = con.input.stream.readShort(); // pos of decimal point from right
-
-        // doubt that this is efficient?
 
         StringBuilder sb = new StringBuilder();
         int[] digits = new int[ndigits];
@@ -56,7 +52,7 @@ public class Numeric implements TypeHandler {
             digits[i] = con.input.stream.readUnsignedShort();
         }
 
-        throw new AbstractMethodError("TBD: figure out the rest");
+        throw new UnsupportedOperationException("TBD: figure out the rest");
     }
 
     @Override

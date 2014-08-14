@@ -11,8 +11,6 @@ import java.io.IOException;
  * Created by zilence on 10.08.14.
  */
 public class Int4 implements TypeHandler {
-    public static final Int4 OID = new Int4(26);
-    public static final Int4 INSTANCE = new Int4(23);
 
     private final int oid;
 

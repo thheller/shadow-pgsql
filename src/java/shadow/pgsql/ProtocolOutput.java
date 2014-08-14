@@ -81,7 +81,7 @@ public class ProtocolOutput {
         this.position += size;
     }
 
-    void complete() {
+    public void complete() {
         if (marks.empty()) {
             throw new IllegalStateException("no marks");
         }

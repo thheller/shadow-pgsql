@@ -3,6 +3,7 @@ package shadow.pgsql;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Created by zilence on 12.08.14.
@@ -32,6 +33,8 @@ public class PreparedQuery extends PreparedBase {
         executeWithParams(typeDecoders, queryParams);
 
         Object queryResult = resultBuilder.init();
+
+        Map<String, String> errorData = null;
 
         // flow <- 2/D*/s?/C?
         RESULT_LOOP:
@@ -99,10 +102,19 @@ public class PreparedQuery extends PreparedBase {
                     pg.input.readReadyForQuery();
                     break RESULT_LOOP;
                 }
+                case 'E':
+                {
+                    errorData = pg.input.readErrorData();
+                    break;
+                }
                 default: {
                     throw new IllegalStateException(String.format("invalid protocol action while reading query results: '%s'", type));
                 }
             }
+        }
+
+        if (errorData != null) {
+            throw new CommandException(String.format("Failed to execute Query: %s", query.getSQLString()), errorData);
         }
 
         return resultBuilder.complete(queryResult);

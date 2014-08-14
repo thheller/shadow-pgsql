@@ -108,7 +108,7 @@ public class Database {
                     @Override
                     public void process(List row) {
                         String colName = (String) row.get(0);
-                        int colIndex = (int) row.get(1);
+                        short colIndex = (short) row.get(1);
                         int tableOid = (int) row.get(2);
                         String tableName = (String) row.get(3);
 

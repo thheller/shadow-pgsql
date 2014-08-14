@@ -11,15 +11,15 @@ import java.io.IOException;
  * Created by zilence on 10.08.14.
  */
 public class Int2 implements TypeHandler {
-    public static final int OID = 21;
-    public static final Int2 INSTANCE = new Int2();
+    private final int oid;
 
-    Int2() {
+    public Int2(int oid) {
+        this.oid = oid;
     }
 
     @Override
     public int getTypeOid() {
-        return OID;
+        return oid;
     }
 
     @Override
@@ -47,7 +47,7 @@ public class Int2 implements TypeHandler {
 
     @Override
     public Object decodeBinary(Connection con, ColumnInfo field, int colSize) throws IOException {
-        return con.input.readInt16();
+        return (short)con.input.readInt16();
     }
 
     @Override
