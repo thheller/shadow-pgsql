@@ -82,7 +82,7 @@ public class Database {
                     }
                 });
 
-        int results = (int) con.executeQuery(pg_types);
+        int results = (int) con.executeQueryWith(pg_types);
 
         if (results == 0) {
             throw new IllegalStateException("no types?");
@@ -120,7 +120,7 @@ public class Database {
                     }
                 });
 
-        con.executeQuery(schema);
+        con.executeQueryWith(schema);
     }
 
     public String getNameForColumn(String tableName, int positionInTable) {

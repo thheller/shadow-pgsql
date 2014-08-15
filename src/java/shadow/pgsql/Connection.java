@@ -9,7 +9,7 @@ import java.util.Map;
 
 /**
  * Primary Inteface to talk to the backend, usually obtained via Database
- *
+ * <p/>
  * NOT THREAD-SAFE! Should be closed after use.
  *
  * @author Thomas Heller
@@ -169,7 +169,7 @@ public class Connection implements AutoCloseable {
     public void begin() throws IOException {
         checkReady();
 
-        switch(txState) {
+        switch (txState) {
             case IDLE:
                 this.simpleStatement("BEGIN");
                 break;
@@ -201,11 +201,11 @@ public class Connection implements AutoCloseable {
         this.simpleStatement("ROLLBACK");
     }
 
-    public Object executeQuery(String query, Object... params) throws IOException {
+    public Object executeQueryWith(String query, Object... params) throws IOException {
         return executeQuery(new SimpleQuery(query), Arrays.asList(params));
     }
 
-    public Object executeQuery(Query query, Object... params) throws IOException {
+    public Object executeQueryWith(Query query, Object... params) throws IOException {
         return executeQuery(query, Arrays.asList(params));
     }
 
@@ -215,7 +215,7 @@ public class Connection implements AutoCloseable {
         }
     }
 
-    public StatementResult execute(String statement, Object... params) throws IOException {
+    public StatementResult executeWith(String statement, Object... params) throws IOException {
         try (PreparedStatement stmt = prepare(new SimpleStatement(statement))) {
             return stmt.executeWith(params);
         }
@@ -387,11 +387,17 @@ public class Connection implements AutoCloseable {
 
             final TypeHandler[] encoders = new TypeHandler[paramInfo.length];
             for (int i = 0; i < encoders.length; i++) {
+                TypeHandler encoder = null;
+
                 if (typeHints.size() > i) {
-                    encoders[i] = typeHints.get(i);
-                } else {
-                    encoders[i] = query.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
+                    encoder = typeHints.get(i);
                 }
+
+                if (encoder == null) {
+                    encoder = query.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
+                }
+
+                encoders[i] = encoder;
             }
 
             RowBuilder rowBuilder = query.createRowBuilder(columnInfos);
@@ -406,37 +412,49 @@ public class Connection implements AutoCloseable {
 
             return new PreparedQuery(this, statementId, encoders, query, columnInfos, decoders, resultBuilder, rowBuilder);
         } catch (Exception e) {
-            // FIXME: this might also throw
-            closeQuery(statementId);
+            try {
+                closeQuery(statementId);
+            } catch (Exception e2) {
+                // FIXME: what is correct here?
+            }
             throw e;
         }
     }
 
     private void writeParseDescribeSync(String query, List<TypeHandler> typeHints, String statementId) throws IOException {
         checkReady();
-
         output.checkReset();
-        this.state = ConnectionState.QUERY_OPEN;
 
-        // Parse
-        output.beginCommand('P');
-        output.string(statementId);
-        output.string(query);
-        output.int16((short) typeHints.size());
-        for (TypeHandler t : typeHints) {
-            output.int32(t.getTypeOid());
+        try {
+            // Parse
+            output.beginCommand('P');
+            output.string(statementId);
+            output.string(query);
+            output.int16((short) typeHints.size());
+            for (TypeHandler t : typeHints) {
+                if (t == null) {
+                    output.int32(0);
+                } else {
+                    output.int32(t.getTypeOid());
+                }
+            }
+            output.complete();
+
+            // Describe - want ParameterDescription + RowDescription
+            output.beginCommand('D');
+            output.int8((byte) 'S');
+            output.string(statementId);
+            output.complete();
+
+            // Sync
+            output.simpleCommand('S');
+            output.flushAndReset();
+
+            this.state = ConnectionState.QUERY_OPEN;
+        } catch (Exception e) {
+            output.reset();
+            throw e;
         }
-        output.complete();
-
-        // Describe - want ParameterDescription + RowDescription
-        output.beginCommand('D');
-        output.int8((byte) 'S');
-        output.string(statementId);
-        output.complete();
-
-        // Sync
-        output.simpleCommand('S');
-        output.flushAndReset();
     }
 
     public void close() throws IOException {
@@ -456,7 +474,6 @@ public class Connection implements AutoCloseable {
 
     public void closeQuery(String statementId) throws IOException {
         output.checkReset();
-        state = ConnectionState.QUERY_CLOSE;
 
         // Close
         output.beginCommand('C');
@@ -467,6 +484,8 @@ public class Connection implements AutoCloseable {
         // Sync
         output.simpleCommand('S');
         output.flushAndReset();
+
+        state = ConnectionState.QUERY_CLOSE;
 
         Map<String, String> errorData = null;
         boolean closed = false;
@@ -485,8 +504,7 @@ public class Connection implements AutoCloseable {
                     closed = true;
                     break;
                 }
-                case 'E':
-                {
+                case 'E': {
                     errorData = input.readErrorData();
                     break;
                 }

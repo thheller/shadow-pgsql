@@ -10,7 +10,6 @@ import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.Assert.*;
@@ -27,9 +26,9 @@ public class BasicTest {
         this.db = Database.setup("localhost", 5432, "zilence", "shadow_pgsql");
         this.pg = db.connect();
 
-        pg.execute("DELETE FROM num_types");
-        pg.execute("DELETE FROM timestamp_types");
-        pg.execute("DELETE FROM array_types");
+        pg.executeWith("DELETE FROM num_types");
+        pg.executeWith("DELETE FROM timestamp_types");
+        pg.executeWith("DELETE FROM array_types");
     }
 
     @After
@@ -54,7 +53,7 @@ public class BasicTest {
         SimpleQuery query = new SimpleQuery("SELECT fint8 FROM num_types");
         query.setRowBuilder(Helpers.SINGLE_COLUMN);
 
-        List numTypes = (List) pg.executeQuery(query);
+        List numTypes = (List) pg.executeQueryWith(query);
         assertTrue(numTypes.contains(1l));
         assertFalse(numTypes.contains(2l));
         assertTrue(numTypes.contains(3l));
@@ -63,7 +62,7 @@ public class BasicTest {
     @Test
     public void testBasicError() throws IOException {
         try {
-            pg.executeQuery("SELECT * FROM unknown_table");
+            pg.executeQueryWith("SELECT * FROM unknown_table");
 
             fail("Table doesn't exist");
         } catch (CommandException e) {

@@ -11,9 +11,11 @@ public class SimpleQuery implements Query {
     private final String sql;
 
     private final List<TypeHandler> parameterTypes;
+
+    private TypeRegistry typeRegistry = TypeRegistry.DEFAULT;
+
     private ResultBuilder resultBuilder;
     private RowBuilder rowBuilder;
-    private TypeRegistry typeRegistry = TypeRegistry.DEFAULT;
 
     public SimpleQuery(String sql) {
         this(sql, new ArrayList<>());
@@ -21,6 +23,14 @@ public class SimpleQuery implements Query {
 
     public SimpleQuery(String sql, List<TypeHandler> typeHandlers) {
         this(sql, typeHandlers, Helpers.RESULT_AS_LIST, Helpers.ROW_AS_MAP);
+    }
+
+    public SimpleQuery(String sql, List<TypeHandler> parameterTypes, TypeRegistry typeRegistry, ResultBuilder resultBuilder, RowBuilder rowBuilder) {
+        this.sql = sql;
+        this.parameterTypes = parameterTypes;
+        this.typeRegistry = typeRegistry;
+        this.resultBuilder = resultBuilder;
+        this.rowBuilder = rowBuilder;
     }
 
     public SimpleQuery(String sql, List<TypeHandler> parameterTypes, ResultBuilder resultBuilder, RowBuilder rowBuilder) {

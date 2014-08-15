@@ -119,8 +119,8 @@ public abstract class PreparedBase implements AutoCloseable {
             pg.state = ConnectionState.QUERY_RESULT;
         } catch (Exception e) {
             // nothing on the wire, no harm done
-            pg.state = ConnectionState.READY;
             pg.output.reset();
+            pg.state = ConnectionState.READY;
             throw e;
         }
     }
