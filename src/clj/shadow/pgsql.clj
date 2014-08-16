@@ -11,7 +11,9 @@
             ResultBuilder
             ColumnInfo
             Helpers
-            SimpleQuery])
+            SimpleQuery]
+           [shadow.pgsql.types
+            Text])
 
   (:require [clojure.string :as str]))
 
@@ -31,7 +33,6 @@
   (to-sql-name [_ kw]
     (with-underscores (name kw)))
   (from-sql-name [_ sv]
-    ;; FIXME: handle ?column? (unnamed sql columns)
     (keyword (with-dashes sv))))
 
 (def ^{:private true
@@ -112,27 +113,61 @@
                           (into-array))]
     (ClojureMapBuilder. lookup-array)))
 
-(defn row->single-column
+(defn row->one-column
+  "row is returned as the value of the first (only) column"
   [db columns]
   Helpers/SINGLE_COLUMN)
 
-(defn result->single-row
+(defn result->one-row
+  "result is return as nil or row"
   [db columns]
   Helpers/SINGLE_ROW)
 
+(def keyword-type
+  (Text. 
+   (reify shadow.pgsql.types.Text$Conversion
+     (encode [_ param]
+       (when-not (keyword? param)
+         (throw (IllegalArgumentException. (format "not a keyword: %s" (pr-str param)))))
+       (.substring (str param) 1))
+     (decode [_ ^String s]
+       (let [idx (.indexOf s "/")]
+         (if (not= -1 idx)
+           (keyword (.substring s 0 idx)
+                    (.substring s idx))
+           (keyword s)))))))
+
+(deftype ClojureStatement [db sql params types]
+  Statement
+  (getSQLString [_]
+    sql)
+
+  (getParameterTypes [_]
+    params)
+
+  (getTypeRegistry [_]
+    types))
+
 (deftype ClojureQuery [db sql params types result-builder row-builder]
   Query
-  (getSQLString [this] sql)
+  (getSQLString [this]
+    sql)
 
-  (getParameterTypes [this] params)
+  (getParameterTypes [this]
+    params)
 
-  (getTypeRegistry [this] types)
+  (getTypeRegistry [this]
+    types)
 
   (createResultBuilder [this columns]
-    (result-builder db columns))
+    (if (fn? result-builder)
+      (result-builder db columns)
+      result-builder))
   
   (createRowBuilder [this columns]
-    (row-builder db columns)))
+    (if (fn? row-builder)
+      (row-builder db columns)
+      row-builder)))
 
 (defn as-query [db args]
   (cond
@@ -156,6 +191,24 @@
    :else
    (throw (ex-info "cannot build query from args" {:args args}))))
 
+(defn as-statement [db args]
+  (cond
+   (string? args)
+   (ClojureStatement. db args [] (:types db))
+   
+   (map? args)
+   (let [{:keys [sql params types]} args]
+     (ClojureStatement. db
+                        sql
+                        (or params [])
+                        (or types
+                            (:types db)
+                            TypeRegistry/DEFAULT)))
+   
+   (instance? Statement args)
+   args
+   ))
+
 (defn query [db query & params]
   (let [query (as-query db query)
         params (into [] params)]
@@ -169,6 +222,10 @@
     result-builder :result
     :as args}
    data]
+  (when-not (and (vector? columns)
+                 (seq columns))
+    (throw (ex-info "need a vector of columns" args)))
+  
   (let [{:keys [table-naming column-naming types]} db
         table-name (->> (:table args)
                         (to-sql-name table-naming))
@@ -211,6 +268,13 @@
                      (transient []))
              (persistent!))
         ))))
+
+(defn execute [db stmt & params]
+  (let [stmt (as-statement db stmt)
+        params (into [] params)]
+    (with-connection [^Connection con db]
+      (-> (.execute con stmt params)
+          (.getRowsAffected)))))
 
 (defn start
   [{:keys [host

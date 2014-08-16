@@ -1,6 +1,7 @@
 package shadow.pgsql;
 
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -36,7 +37,9 @@ public class PreparedQuery extends PreparedBase {
 
         Map<String, String> errorData = null;
 
-        // flow <- 2/D*/s?/C?
+        boolean complete = false;
+
+        // flow <- 2/D*/n?/C/Z
         RESULT_LOOP:
         while (true) {
             final char type = pg.input.readNextCommand();
@@ -94,6 +97,8 @@ public class PreparedQuery extends PreparedBase {
                     final int size = pg.input.readInt32();
                     final String tag = pg.input.readString();
 
+                    complete = true;
+
                     // FIXME: losing information (tag)
                     break;
                 }
@@ -107,10 +112,20 @@ public class PreparedQuery extends PreparedBase {
                     errorData = pg.input.readErrorData();
                     break;
                 }
+                case 'n': // NoData?
+                {
+                    final int size = pg.input.readInt32();
+                    // FIXME: not really sure why I get these sometimes? (mostly under stress)
+                    break;
+                }
                 default: {
                     throw new IllegalStateException(String.format("invalid protocol action while reading query results: '%s'", type));
                 }
             }
+        }
+
+        if (!complete) {
+            throw new IllegalStateException("Command did not complete");
         }
 
         if (errorData != null) {

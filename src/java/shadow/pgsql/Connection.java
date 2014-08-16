@@ -2,10 +2,7 @@ package shadow.pgsql;
 
 import java.io.*;
 import java.net.Socket;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Primary Inteface to talk to the backend, usually obtained via Database
@@ -216,8 +213,12 @@ public class Connection implements AutoCloseable {
     }
 
     public StatementResult executeWith(String statement, Object... params) throws IOException {
-        try (PreparedStatement stmt = prepare(new SimpleStatement(statement))) {
-            return stmt.executeWith(params);
+        return execute(new SimpleStatement(statement), Arrays.asList(params));
+    }
+
+    public StatementResult execute(Statement statement, List params) throws IOException {
+        try (PreparedStatement stmt = prepare(statement)) {
+            return stmt.execute(params);
         }
     }
 
@@ -458,8 +459,6 @@ public class Connection implements AutoCloseable {
     }
 
     public void close() throws IOException {
-        checkReady();
-
         output.checkReset();
         output.simpleCommand('X');
         output.flushAndReset();

@@ -1,14 +1,47 @@
 package shadow.pgsql.types;
 
+import shadow.pgsql.ColumnInfo;
+import shadow.pgsql.Connection;
+import shadow.pgsql.ProtocolOutput;
+import shadow.pgsql.TypeHandler;
+
+import java.io.IOException;
+
 /**
  * Created by zilence on 11.08.14.
  */
-public class Text extends AbstractText {
+public class Text implements TypeHandler {
+    public static interface Conversion {
+        public String encode(Object param);
+        public Object decode(String value);
+    }
+
+    public static Conversion AS_IS = new Conversion() {
+        @Override
+        public String encode(Object param) {
+            return param.toString();
+        }
+
+        @Override
+        public Object decode(String value) {
+            return value;
+        }
+    };
 
     private final int oid;
+    private final Conversion conversion;
 
     public Text(int oid) {
+        this(oid, AS_IS);
+    }
+
+    public Text(int oid, Conversion conversion) {
         this.oid = oid;
+        this.conversion = conversion;
+    }
+
+    public Text(Conversion conversion) {
+        this(25, conversion); // 25 = text (default type)
     }
 
     @Override
@@ -17,12 +50,32 @@ public class Text extends AbstractText {
     }
 
     @Override
-    public String asString(Object param) {
-        return param.toString();
+    public boolean supportsBinary() {
+        return true;
     }
 
     @Override
-    public Object fromString(String input) {
-        return input;
+    public void encodeBinary(Connection con, ProtocolOutput output, Object param) {
+        // FIXME: handle encoding properly, I assume everything is UTF-8 for now!
+        output.bytea(conversion.encode(param).getBytes());
+    }
+
+    @Override
+    public String encodeToString(Connection con, Object param) {
+        return conversion.encode(param);
+    }
+
+    @Override
+    public Object decodeBinary(Connection con, ColumnInfo field, int size) throws IOException {
+        byte[] bytes = new byte[size];
+        con.input.read(bytes);
+
+        // FIXME: utf-8
+        return conversion.decode(new String(bytes));
+    }
+
+    @Override
+    public Object decodeString(Connection con, ColumnInfo field, String value) {
+        return conversion.decode(value);
     }
 }

@@ -1,10 +1,14 @@
 (ns shadow.pgsql-test
   (:use [clojure.test])
+  (:import [shadow.pgsql Helpers])
   (:require [clojure.pprint :refer (pprint)]
             [shadow.pgsql :as sql]))
 
-(deftest ^:wip test-basics
+(deftest test-basics
   (with-open [db (sql/start {:user "zilence" :database "shadow_pgsql"})]
+    (pprint
+     (sql/execute db "DELETE FROM num_types"))
+    
     (pprint
      (sql/insert db {:table :num-types
                      :columns [:fint2]
@@ -12,9 +16,11 @@
                                    (mapv #(get row %) columns))
                      :returning [:id]
 
-                     :merge-fn #(assoc %1 :id %2)
-                     :row sql/row->single-column
-                     :result sql/result->single-row}
+                     :merge-fn (fn [row result]
+                                 (assoc row :id result))
+
+                     :row sql/row->one-column
+                     :result sql/result->one-row}
 
                  [{:fint2 123
                    :something :ignored}]))
@@ -23,4 +29,15 @@
                            :params []
                            :result sql/result->vec
                            :row sql/row->map}))
+    ))
+
+(deftest ^:wip test-with-actual-data
+  (with-open [db (-> (sql/start {:user "zilence" :database "cms"})
+                     (sql/with-types {:cms-public {:a sql/keyword-type}}))]
+    (dotimes [i 50]
+      (time
+       (let [data (sql/query db {:sql "SELECT * FROM cms_public"
+                                 :result sql/result->vec
+                                 :row sql/row->map})]
+         (prn [:count (count data)]))))
     ))
