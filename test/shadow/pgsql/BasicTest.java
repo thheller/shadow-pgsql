@@ -51,7 +51,7 @@ public class BasicTest {
         pg.commit();
 
         SimpleQuery query = new SimpleQuery("SELECT fint8 FROM num_types");
-        query.setRowBuilder(Helpers.SINGLE_COLUMN);
+        query.setRowBuilder(Helpers.ONE_COLUMN);
 
         List numTypes = (List) pg.executeQueryWith(query);
         assertTrue(numTypes.contains(1l));
@@ -138,8 +138,8 @@ public class BasicTest {
 
     public PreparedQuery roundtripQuery(String table, String field) throws IOException {
         SimpleQuery q = new SimpleQuery(String.format("INSERT INTO %s (%s) VALUES ($1) RETURNING %s", table, field, field));
-        q.setRowBuilder(Helpers.SINGLE_COLUMN);
-        q.setResultBuilder(Helpers.SINGLE_ROW);
+        q.setRowBuilder(Helpers.ONE_COLUMN);
+        q.setResultBuilder(Helpers.ONE_ROW);
 
         return pg.prepareQuery(q);
     }

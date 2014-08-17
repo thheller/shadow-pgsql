@@ -19,7 +19,10 @@ public class Text implements TypeHandler {
     public static Conversion AS_IS = new Conversion() {
         @Override
         public String encode(Object param) {
-            return param.toString();
+            if (!(param instanceof String)) {
+                throw new IllegalArgumentException(String.format("not a string: %s", param.getClass().getName()));
+            }
+            return (String)param;
         }
 
         @Override

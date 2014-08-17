@@ -1,6 +1,6 @@
 package shadow.pgsql;
 
-import shadow.pgsql.types.*;
+import shadow.pgsql.types.Types;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -8,20 +8,20 @@ import java.util.Map;
 
 /**
  * Immutable Type Registry
- *
+ * <p/>
  * Allows overriding how types and specific Columns in a Table are handled
- *
+ * <p/>
  * Example:
- *
+ * <p/>
  * Table T with column C of type text, type text usually encode/decodes Strings.
- *
+ * <p/>
  * .registerColumnHandler(T, C, myHandler)
- *
+ * <p/>
  * allows you to encode/decode other types into a String column
  * (eg. Clojure Keywords, EDN, etc.)
- *
+ * <p/>
  * Want to handle timestamp/timestamptz as JodaTime? No problem.
- *
+ * <p/>
  * TypeRegistry is thread-safe and you'll usually just have one per project.
  *
  * @author Thomas Heller
@@ -71,7 +71,6 @@ public class TypeRegistry {
                 Types.INT4_ARRAY,
                 Types.INT8,
                 Types.INT8_ARRAY,
-                Types.INT4,
                 Types.OID,
                 Types.NUMERIC,
                 Types.NAME,
@@ -148,6 +147,7 @@ public class TypeRegistry {
     public TypeHandler getTypeHandlerForColumn(String tableName, String columnName) {
         return customHandlers.get(new ColumnByName(tableName, columnName));
     }
+
     private static class ColumnByName {
         final String table;
         final String column;

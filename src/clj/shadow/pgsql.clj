@@ -13,7 +13,8 @@
             Helpers
             SimpleQuery]
            [shadow.pgsql.types
-            Text])
+            Text
+            Text$Conversion])
 
   (:require [clojure.string :as str]))
 
@@ -91,14 +92,17 @@
   (complete [_ state]
     (complete-fn state)))
 
-(deftype ClojureMapBuilder [column-naming]
+(deftype ClojureMapBuilder [column-names]
   RowBuilder
-  (init [_] (transient {}))
+  (init [_]
+    (transient {}))
+
   (add [_ state column-info col-index col-value]
     ;; FIXME: do I want {:some-column nil} in my map?
     (if (nil? col-value)
       state
-      (assoc! state (nth column-naming col-index) col-value)))
+      (assoc! state (nth column-names col-index) col-value)))
+
   (complete [_ state]
     (persistent! state)))
 
@@ -116,16 +120,16 @@
 (defn row->one-column
   "row is returned as the value of the first (only) column"
   [db columns]
-  Helpers/SINGLE_COLUMN)
+  Helpers/ONE_COLUMN)
 
 (defn result->one-row
   "result is return as nil or row"
   [db columns]
-  Helpers/SINGLE_ROW)
+  Helpers/ONE_ROW)
 
 (def keyword-type
   (Text. 
-   (reify shadow.pgsql.types.Text$Conversion
+   (reify Text$Conversion
      (encode [_ param]
        (when-not (keyword? param)
          (throw (IllegalArgumentException. (format "not a keyword: %s" (pr-str param)))))
@@ -209,7 +213,8 @@
    args
    ))
 
-(defn query [db query & params]
+(defn query
+  [db query & params]
   (let [query (as-query db query)
         params (into [] params)]
     (with-connection [^Connection con db]
@@ -305,9 +310,9 @@
      (let [new-registry (.copy type-registry)]
 
        (doseq [[table-name columns] type-map
+               :let [table-name (to-sql-name table-naming table-name)]
                [column-name handler] columns
-               :let [table-name (to-sql-name table-naming table-name)
-                     column-name (to-sql-name column-naming column-name)]]
+               :let [column-name (to-sql-name column-naming column-name)]]
          (.registerColumnHandler new-registry table-name column-name handler))
 
        (.build new-registry))))

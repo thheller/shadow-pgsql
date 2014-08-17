@@ -48,7 +48,7 @@ public class Helpers {
         }
     };
 
-    public static final ResultBuilder<Object, Object, Object> SINGLE_ROW = new ResultBuilder<Object, Object, Object>() {
+    public static final ResultBuilder<Object, Object, Object> ONE_ROW = new ResultBuilder<Object, Object, Object>() {
         @Override
         public Object init() {
             return null;
@@ -68,7 +68,7 @@ public class Helpers {
         }
     };
 
-    public static final RowBuilder<Object, Object> SINGLE_COLUMN = new RowBuilder<Object, Object>() {
+    public static final RowBuilder<Object, Object> ONE_COLUMN = new RowBuilder<Object, Object>() {
         @Override
         public Object init() {
             return null;
