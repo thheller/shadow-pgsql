@@ -1,7 +1,6 @@
 package shadow.pgsql;
 
 import java.io.IOException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -38,6 +37,8 @@ public class PreparedQuery extends PreparedBase {
         Map<String, String> errorData = null;
 
         boolean complete = false;
+
+        final byte[] fieldBuffer = new byte[16384];
 
         // flow <- 2/D*/n?/C/Z
         RESULT_LOOP:
@@ -77,9 +78,10 @@ public class PreparedQuery extends PreparedBase {
                         if (colSize != -1) {
                             if (decoder.supportsBinary()) {
                                 value = decoder.decodeBinary(pg, field, colSize);
+                                // FIXME: verify that all bytes were consumed, makes me question using InputStreams ...
                             } else {
                                 byte[] bytes = new byte[colSize];
-                                pg.input.read(bytes);
+                                pg.input.readFully(bytes);
 
                                 // FIXME: assumes UTF-8
                                 final String stringValue = new String(bytes);
@@ -110,12 +112,6 @@ public class PreparedQuery extends PreparedBase {
                 case 'E':
                 {
                     errorData = pg.input.readErrorData();
-                    break;
-                }
-                case 'n': // NoData?
-                {
-                    final int size = pg.input.readInt32();
-                    // FIXME: not really sure why I get these sometimes? (mostly under stress)
                     break;
                 }
                 default: {

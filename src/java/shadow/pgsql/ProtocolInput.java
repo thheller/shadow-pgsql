@@ -153,7 +153,6 @@ public class ProtocolInput {
         return oids;
     }
 
-
     public int readInt32() throws IOException {
         return stream.readInt();
     }
@@ -166,8 +165,8 @@ public class ProtocolInput {
         stream.close();
     }
 
-    public void read(byte[] data) throws IOException {
-        stream.read(data);
+    public void readFully(byte[] data) throws IOException {
+        stream.readFully(data);
     }
 
     public StatementResult readStatementResult() throws IOException {

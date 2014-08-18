@@ -4,6 +4,7 @@ import shadow.pgsql.utils.RowProcessor;
 
 import java.io.IOException;
 import java.net.Socket;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -112,11 +113,11 @@ public class Database {
                         int tableOid = (int) row.get(2);
                         String tableName = (String) row.get(3);
 
+                        columnNames.put(new ColumnByTableIndex(tableName, colIndex), colName);
+
                         if (!oid2name.containsKey(tableOid)) {
                             oid2name.put(tableOid, tableName);
                         }
-
-                        columnNames.put(new ColumnByTableIndex(tableName, colIndex), colName);
                     }
                 });
 

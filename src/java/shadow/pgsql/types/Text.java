@@ -71,7 +71,7 @@ public class Text implements TypeHandler {
     @Override
     public Object decodeBinary(Connection con, ColumnInfo field, int size) throws IOException {
         byte[] bytes = new byte[size];
-        con.input.read(bytes);
+        con.input.readFully(bytes);
 
         // FIXME: utf-8
         return conversion.decode(new String(bytes));

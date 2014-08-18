@@ -93,7 +93,7 @@ public class Connection implements AutoCloseable {
                     final int dataLen = size - 8;
                     if (dataLen > 0) {
                         byte[] data = new byte[dataLen];
-                        input.read(data);
+                        input.readFully(data);
 
                         this.state = ConnectionState.AUTHENTICATING;
                         authHandler.doAuth(this, code, data);
@@ -156,7 +156,6 @@ public class Connection implements AutoCloseable {
         output.complete();
 
         output.flushAndReset();
-
 
         return input.readStatementResult();
     }
