@@ -30,6 +30,7 @@ public class Connection implements AutoCloseable {
         this.db = db;
         this.socket = socket;
 
+        // FIXME: should use SocketChannel and ByteBuffer, might be more efficient
         DataInputStream in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
         DataOutputStream out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
         this.input = new ProtocolInput(this, in);

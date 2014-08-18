@@ -2,6 +2,10 @@ package shadow.pgsql;
 
 import shadow.pgsql.utils.RowProcessor;
 
+import javax.net.ssl.SSLSocket;
+import javax.net.ssl.SSLSocketFactory;
+import java.io.BufferedOutputStream;
+import java.io.DataOutputStream;
 import java.io.IOException;
 import java.net.Socket;
 import java.util.ArrayList;
@@ -27,6 +31,7 @@ public class Database {
 
     private final Map<String, String> connectParams;
     private final AuthHandler authHandler;
+    private boolean ssl = false;
 
     Database(String host, int port, Map<String, String> connectParams, AuthHandler authHandler) {
         this.host = host;
@@ -42,6 +47,15 @@ public class Database {
         db.setConnectParam("database", databaseName);
 
         return db.build();
+    }
+
+
+    void enableSSL() {
+        this.ssl = true;
+    }
+
+    public boolean sslEnabled() {
+        return this.ssl;
     }
 
     public String getHost() {
@@ -63,7 +77,34 @@ public class Database {
     }
 
     public Connection connect() throws IOException {
-        Connection pg = new Connection(this, new Socket(host, port));
+        Connection pg = null;
+        Socket socket = new Socket(host, port);
+
+        if (ssl) {
+            DataOutputStream out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream(), 8));
+            out.writeInt(8); // 4+4 (message size)
+            out.writeInt(80877103); // ssl code
+            out.flush();
+
+            final int res = socket.getInputStream().read(); // one byte response S/N
+
+            if (res != 'S') {
+                socket.close();
+                throw new IllegalStateException("ssl not accepted");
+            }
+
+            // FIXME: might need support for custom trust, keystores, or more options in general (client certs?)
+            SSLSocketFactory sslFactory = (SSLSocketFactory) SSLSocketFactory.getDefault();
+            SSLSocket ssl = (SSLSocket) sslFactory.createSocket(socket, host, port, true);
+
+            ssl.startHandshake();
+
+            pg = new Connection(this, ssl);
+
+        } else {
+            pg = new Connection(this, socket);
+        }
+
         pg.startup(connectParams, authHandler);
         return pg;
     }

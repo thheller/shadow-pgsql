@@ -11,6 +11,7 @@ import java.util.Map;
 public class DatabaseBuilder {
     private String host;
     private int port;
+    private boolean ssl = false;
 
     Map<String, String> connectParams = new HashMap<>();
 
@@ -38,6 +39,12 @@ public class DatabaseBuilder {
         return port;
     }
 
+    public DatabaseBuilder useSSL() {
+        this.ssl = true;
+
+        return this;
+    }
+
     public DatabaseBuilder setUser(String user) {
         this.setConnectParam("user", user);
         return this;
@@ -59,6 +66,9 @@ public class DatabaseBuilder {
 
     public Database build() throws IOException {
         Database db = new Database(host, port, Collections.unmodifiableMap(connectParams), authHandler);
+        if (ssl) {
+            db.enableSSL();
+        }
         db.prepare();
         return db;
     }

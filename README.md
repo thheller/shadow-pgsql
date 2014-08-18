@@ -27,7 +27,8 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 - Tests
 - better Error Handling (especially arround Types)
 - Docs
-- SSL & Auth Support
+- more SSL options
+- Auth Support (MD5, ...)
 - Generics (didn't write any serious Java for over 10 years, need to learn Generics first)
 - check Performance (should be faster than JDBC, but needs check to be sure)
 

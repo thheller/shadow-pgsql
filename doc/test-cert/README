@@ -1,0 +1,12 @@
+Self-Signed SSL Cert for Testing.
+
+Must be installed via keytool in order for JAVA to accept it.
+
+keytool -importcert -trustcacerts -keystore test.store -file server.crt -storepass testtest
+
+The JVM must then be started with:
+
+-Djavax.net.ssl.trustStore=doc/test-cert/test.store -Djavax.net.ssl.trustStorePassword=testtest
+
+or use a real cert ...
+

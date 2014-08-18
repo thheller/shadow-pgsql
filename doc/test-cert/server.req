@@ -1,0 +1,40 @@
+Certificate Request:
+    Data:
+        Version: 0 (0x0)
+        Subject: C=DE, ST=Some-State, O=Internet Widgits Pty Ltd
+        Subject Public Key Info:
+            Public Key Algorithm: rsaEncryption
+            RSA Public Key: (1024 bit)
+                Modulus (1024 bit):
+                    00:bb:dc:0c:86:ab:ee:45:8b:ff:1f:e4:34:bf:b8:
+                    62:b5:2c:18:27:01:57:4d:bd:88:69:35:d1:1e:d7:
+                    bc:d9:87:b2:0d:dc:95:81:5e:3a:7f:1c:db:64:89:
+                    0c:e5:99:a2:2d:7f:b1:a7:c9:89:b8:ff:76:d8:ee:
+                    70:00:64:6e:cb:96:c3:80:88:16:74:15:35:8f:01:
+                    49:6d:03:80:bf:6e:ce:7d:ac:06:66:d4:e6:b2:4f:
+                    11:97:23:ae:2c:c6:4e:36:b0:72:3d:b4:f9:5c:59:
+                    e9:15:9d:fb:d2:e4:f9:0a:fc:2f:86:6d:95:a4:f2:
+                    39:09:11:c0:60:75:9f:ad:39
+                Exponent: 65537 (0x10001)
+        Attributes:
+            a0:00
+    Signature Algorithm: sha1WithRSAEncryption
+        51:00:08:37:40:6c:73:1e:dc:ba:05:b1:74:6d:59:e5:6a:b7:
+        6f:68:8a:01:56:83:1e:6d:04:bf:5c:65:3c:cf:48:f5:81:5f:
+        4c:e2:ac:94:d0:41:fc:a0:8f:b5:85:20:af:00:dd:96:fc:02:
+        49:0e:1b:dd:5f:7a:8f:e7:82:40:92:6e:88:0f:c1:c0:ac:01:
+        7d:83:64:1c:78:01:ad:9e:0b:be:ef:14:8f:e0:99:db:8a:4e:
+        30:d3:8a:04:71:ad:a8:f0:fb:2d:5a:a3:ab:1f:b6:57:ee:7f:
+        6c:73:16:15:b3:b2:81:43:e3:fd:c9:c1:3f:73:ef:42:8d:a8:
+        e5:37
+-----BEGIN CERTIFICATE REQUEST-----
+MIIBhDCB7gIBADBFMQswCQYDVQQGEwJERTETMBEGA1UECBMKU29tZS1TdGF0ZTEh
+MB8GA1UEChMYSW50ZXJuZXQgV2lkZ2l0cyBQdHkgTHRkMIGfMA0GCSqGSIb3DQEB
+AQUAA4GNADCBiQKBgQC73AyGq+5Fi/8f5DS/uGK1LBgnAVdNvYhpNdEe17zZh7IN
+3JWBXjp/HNtkiQzlmaItf7GnyYm4/3bY7nAAZG7LlsOAiBZ0FTWPAUltA4C/bs59
+rAZm1OayTxGXI64sxk42sHI9tPlcWekVnfvS5PkK/C+GbZWk8jkJEcBgdZ+tOQID
+AQABoAAwDQYJKoZIhvcNAQEFBQADgYEAUQAIN0Bscx7cugWxdG1Z5Wq3b2iKAVaD
+Hm0Ev1xlPM9I9YFfTOKslNBB/KCPtYUgrwDdlvwCSQ4b3V96j+eCQJJuiA/BwKwB
+fYNkHHgBrZ4Lvu8Uj+CZ24pOMNOKBHGtqPD7LVqjqx+2V+5/bHMWFbOygUPj/cnB
+P3PvQo2o5Tc=
+-----END CERTIFICATE REQUEST-----
