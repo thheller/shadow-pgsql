@@ -16,7 +16,7 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 
 ### Features
 
-- Fully customizable Types via simple [Interface]:(https://github.com/thheller/shadow-pgsql/blob/master/src/java/shadow/pgsql/TypeHandler.java)
+- Fully customizable Types via simple [Interface](https://github.com/thheller/shadow-pgsql/blob/master/src/java/shadow/pgsql/TypeHandler.java)
 - Binary Format when supported by Type
 - Stuff?
 
@@ -45,8 +45,8 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 
 Needs more docs, for now check what can hardly be called Tests.
 
-- [Java]:(https://github.com/thheller/shadow-pgsql/blob/master/test/shadow/pgsql/BasicTest.java)
-- [Clojure]:(https://github.com/thheller/shadow-pgsql/blob/master/test/shadow/pgsql_test.clj)
+- [Java](https://github.com/thheller/shadow-pgsql/blob/master/test/shadow/pgsql/BasicTest.java)
+- [Clojure](https://github.com/thheller/shadow-pgsql/blob/master/test/shadow/pgsql_test.clj)
 
 ## License
 
