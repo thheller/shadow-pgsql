@@ -190,7 +190,7 @@ public class BasicTest {
     @Test
     public void testTextArray() throws IOException {
         try (PreparedQuery pq = roundtripQuery("array_types", "atext")) {
-            String[] send = new String[]{"1", "2", "3"};
+            String[] send = new String[]{"clojure", "postgresql", "java"};
 
             // lol varargs ...
             List params = new ArrayList();
@@ -199,6 +199,14 @@ public class BasicTest {
             String[] recv = (String[]) pq.execute(params);
 
             assertArrayEquals(send, recv);
+
+            List sendList = new ArrayList();
+            sendList.add("4");
+            sendList.add("5");
+            sendList.add("6");
+
+            recv = (String[]) pq.executeWith(sendList);
+            // FIXME: compare
         }
     }
 
@@ -212,6 +220,20 @@ public class BasicTest {
             List params = new ArrayList();
             params.add(null);
             assertNull(pq.execute(params));
+        }
+    }
+
+    @Test
+    public void testFloat4() throws IOException {
+        try (PreparedQuery pq = roundtripQuery("types", "t_float4")) {
+            assertEquals(3.14f, pq.executeWith(3.14f));
+        }
+    }
+
+    @Test
+    public void testFloat8() throws IOException {
+        try (PreparedQuery pq = roundtripQuery("types", "t_float8")) {
+            assertEquals(3.14d, pq.executeWith(3.14d));
         }
     }
 }

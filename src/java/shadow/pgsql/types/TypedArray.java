@@ -8,6 +8,8 @@ import shadow.pgsql.TypeHandler;
 import java.io.IOException;
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
+import java.util.Collection;
+import java.util.List;
 
 /**
  * Created by zilence on 10.08.14.
@@ -43,7 +45,7 @@ public class TypedArray implements TypeHandler {
         };
     }
 
-    public TypedArray(int oid, TypeHandler itemType, ArrayReader arrayReader) {
+    public TypedArray(TypeHandler itemType, ArrayReader arrayReader) {
         if (!itemType.supportsBinary()) {
             throw new IllegalArgumentException("only binary arrays implemented");
         }
@@ -52,9 +54,26 @@ public class TypedArray implements TypeHandler {
             throw new IllegalArgumentException("Need ArrayReader");
         }
 
-        this.oid = oid;
+        this.oid = arrayOidForType(itemType);
         this.itemType = itemType;
         this.arrayReader = arrayReader;
+    }
+
+    public static int arrayOidForType(TypeHandler type) {
+        switch (type.getTypeOid()) {
+            case Types.OID_INT4:
+                return 1007;
+            case Types.OID_INT2:
+                return 1005;
+            case Types.OID_INT8:
+                return 1016;
+            case Types.OID_TEXT:
+                return 1009;
+            case Types.OID_VARCHAR:
+                return 1015;
+            default:
+                throw new IllegalArgumentException(String.format("don't know array oid for type: [%d,%s]", type.getTypeOid(), type.getClass().getName()));
+        }
     }
 
     @Override
@@ -64,41 +83,71 @@ public class TypedArray implements TypeHandler {
 
     @Override
     public boolean supportsBinary() {
-        return this.itemType.supportsBinary();
+        return true; // binary-only actually
     }
 
     @Override
     public void encodeBinary(Connection con, ProtocolOutput output, Object param) {
-        if (!param.getClass().isArray()) {
-            throw new IllegalArgumentException(String.format("param is not an array: %s", param.getClass().getName()));
-        }
+        if (param instanceof Collection) {
+            Collection coll = (Collection) param;
+            int length = coll.size();
 
-        int dimensions = 1;
+            // FIXME: 2 dim (List of Lists?)
+            int dimensions = 1;
 
-        output.int32(dimensions);
-        output.int32(0); // hasnull FIXME: check nulls
-        output.int32(itemType.getTypeOid()); // element oid
+            output.int32(dimensions);
+            output.int32(0); // hasnull FIXME: check nulls
+            output.int32(itemType.getTypeOid()); // element oid
 
-        int lbound = 1;
+            int lbound = 1;
 
-        for (int i = 0; i < dimensions; i++) {
-            int length = Array.getLength(param);
-            output.int32(length); // dimension size
-            output.int32(lbound); // lower bound?
-            lbound += length;
-        }
-
-        int length = Array.getLength(param);
-        for (int i = 0; i < length; i++) {
-            Object value = Array.get(param, i);
-            if (value == null) {
-                // output.int32(-1);
-                throw new IllegalArgumentException("array has nulls");
-            } else {
-                output.beginExclusive();
-                itemType.encodeBinary(con, output, value);
-                output.complete();
+            for (int i = 0; i < dimensions; i++) {
+                output.int32(length); // dimension size
+                output.int32(lbound); // lower bound?
+                lbound += length;
             }
+
+            for (Object value : coll) {
+                if (value == null) {
+                    // output.int32(-1);
+                    throw new IllegalArgumentException("array has nulls");
+                } else {
+                    output.beginExclusive();
+                    itemType.encodeBinary(con, output, value);
+                    output.complete();
+                }
+            }
+        } else if (param.getClass().isArray()) {
+            // FIXME: 2 dim
+            int dimensions = 1;
+
+            output.int32(dimensions);
+            output.int32(0); // hasnull FIXME: check nulls
+            output.int32(itemType.getTypeOid()); // element oid
+
+            int lbound = 1;
+
+            for (int i = 0; i < dimensions; i++) {
+                int length = Array.getLength(param);
+                output.int32(length); // dimension size
+                output.int32(lbound); // lower bound?
+                lbound += length;
+            }
+
+            int length = Array.getLength(param);
+            for (int i = 0; i < length; i++) {
+                Object value = Array.get(param, i);
+                if (value == null) {
+                    // output.int32(-1);
+                    throw new IllegalArgumentException("array has nulls");
+                } else {
+                    output.beginExclusive();
+                    itemType.encodeBinary(con, output, value);
+                    output.complete();
+                }
+            }
+        } else {
+            throw new IllegalArgumentException(String.format("param is not an array or Collection: %s", param.getClass().getName()));
         }
     }
 

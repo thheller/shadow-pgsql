@@ -37,7 +37,7 @@ public class ProtocolOutput {
     }
 
     private void maybeGrow(int bytesComing) {
-        if (this.out.position() + bytesComing > this.out.capacity()) {
+        if (this.out.remaining() < bytesComing) {
             ByteBuffer larger = ByteBuffer.allocate(this.out.capacity() + BLOCK_SIZE);
 
             out.flip();
@@ -177,8 +177,6 @@ public class ProtocolOutput {
         maybeGrow(in.remaining());
         out.put(in);
     }
-
-
 
     /**
      * sanity check that there is nothing pending

@@ -26,21 +26,36 @@
 (deftest test-basics
   (with-open [db (sql/start {:user "zilence" :database "shadow_pgsql"})]
     (pprint
-     (sql/execute db "DELETE FROM num_types"))
+      (sql/execute db "DELETE FROM num_types"))
 
     (pprint
-     (sql/insert db ?insert-num-types [{:fint2 123
-                                        :something :ignored}]))
+      (sql/insert db ?insert-num-types [{:fint2 123
+                                         :something :ignored}]))
 
     (pprint (sql/query db ?select-fint2))
     ))
 
-(deftest ^:wip test-with-actual-data
-  (with-open [db (-> (sql/start {:user "zilence" :database "cms"})
-                     (sql/with-types {:cms-public {:a sql/keyword-type}}))]
 
-    (let [data (sql/query db {:sql "SELECT * FROM cms_public"
-                              :result sql/result->vec
-                              :row sql/row->map})]
-      (prn [:count (count data)]))
+(def keyword-set-type
+  (sql/set-type sql/keyword-type))
+
+
+(deftest ^:wip test-arrays
+  (with-open [db (-> (sql/start {:user "zilence" :database "shadow_pgsql"})
+                     (sql/with-types {:array-types {:atext keyword-set-type}})
+                     )]
+
+    (sql/execute db "DELETE FROM array_types")
+
+    (sql/execute db {:sql "INSERT INTO array_types (atext) VALUES ($1)"
+                     :params [keyword-set-type]}
+                 #{:clojure :postgresql :java})
+
+    (pprint (sql/query db "SELECT atext FROM array_types"))
+
+    (pprint (sql/query db {:sql "SELECT atext FROM array_types WHERE atext @> ARRAY[$1]"
+                           :params [sql/keyword-type]}
+                       :clojure
+                       ))
+
     ))

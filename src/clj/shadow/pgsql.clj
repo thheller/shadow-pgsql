@@ -13,6 +13,8 @@
             Helpers
             SimpleQuery]
            [shadow.pgsql.types
+            TypedArray
+            ArrayReader
             Text
             Text$Conversion])
 
@@ -140,6 +142,21 @@
            (keyword (.substring s 0 idx)
                     (.substring s idx))
            (keyword s)))))))
+
+(deftype ClojureSetReader []
+  ArrayReader
+  (init [_ size]
+    (transient #{}))
+  (add [_ state index object]
+    (conj! state object))
+  (addNull [_ state index]
+    ;; FIXME: probably to harsh to throw
+    (throw (ex-info "NULL not supported in sets")))
+  (complete [_ state]
+    (persistent! state)))
+
+(defn set-type [item-type]
+  (TypedArray. item-type (ClojureSetReader.)))
 
 (deftype ClojureStatement [db sql params types]
   Statement

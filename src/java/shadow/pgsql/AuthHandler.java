@@ -1,6 +1,7 @@
 package shadow.pgsql;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Created by zilence on 10.08.14.
@@ -16,9 +17,9 @@ public interface AuthHandler {
      *
      * @param con
      * @param type
-     * @param data extra bytes send by the backend, each type contains it own set of bytes
-     *             handle accordingly
+     * @param buf extra bytes send by the backend, each type contains it own set of bytes
+     *            handle accordingly
      * @link http://www.postgresql.org/docs/9.2/static/protocol-message-formats.html
      */
-    public void doAuth(Connection con, int type, byte[] data) throws IOException;
+    public void doAuth(Connection con, int type, ByteBuffer buf) throws IOException;
 }

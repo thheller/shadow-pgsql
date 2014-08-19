@@ -11,11 +11,11 @@ import java.nio.ByteBuffer;
 /**
  * Created by zilence on 19.08.14.
  */
-public class ByteA implements TypeHandler {
+public class Float8 implements TypeHandler {
 
     @Override
     public int getTypeOid() {
-        return 17;
+        return 701;
     }
 
     @Override
@@ -25,20 +25,18 @@ public class ByteA implements TypeHandler {
 
     @Override
     public void encodeBinary(Connection con, ProtocolOutput output, Object param) {
-        if (param instanceof byte[]) {
-            output.write((byte[]) param);
-        } else if (param instanceof ByteBuffer) {
-            output.put((ByteBuffer) param);
+        if (param instanceof Double) {
+            output.float8(((Double) param));
+        } else if (param instanceof Float) {
+            output.float8(((Float) param).doubleValue());
         } else {
-            throw new IllegalArgumentException(String.format("unsupported binary type: %s", param.getClass().getName()));
+            throw new IllegalArgumentException(String.format("not a float8: %s", param.getClass().getName()));
         }
     }
 
     @Override
     public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int size) throws IOException {
-        final byte[] bytes = new byte[size];
-        buf.get(bytes);
-        return bytes;
+        return buf.getDouble();
     }
 
     @Override
@@ -51,3 +49,4 @@ public class ByteA implements TypeHandler {
         throw new UnsupportedOperationException("only binary format supported");
     }
 }
+

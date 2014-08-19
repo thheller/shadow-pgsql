@@ -91,16 +91,11 @@ public class Connection implements AutoCloseable {
                         throw new IllegalStateException("authentication requires AuthHandler");
                     }
 
-                    /*
-                    final int dataLen = size - 8;
+                    final int dataLen = input.getCurrentSize() - 8;
                     if (dataLen > 0) {
-                        byte[] data = new byte[dataLen];
-                        input.getBytes(data);
-
                         this.state = ConnectionState.AUTHENTICATING;
-                        authHandler.doAuth(this, code, data);
+                        authHandler.doAuth(this, code, input.current);
                     }
-                    */
 
                     this.state = ConnectionState.START_UP;
                     break;

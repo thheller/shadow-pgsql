@@ -233,4 +233,8 @@ public class ProtocolInput {
             throw new IllegalStateException(String.format("%s was not size %d (was %d)", message, expected, currentSize));
         }
     }
+
+    public int getCurrentSize() {
+        return currentSize;
+    }
 }

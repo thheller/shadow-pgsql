@@ -14,50 +14,39 @@ This library tries to provide a far simpler yet more powerful interface to the P
 
 JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older versions)
 
+### Features
+
+- Fully customizable Types via simple [Interface]:(https://github.com/thheller/shadow-pgsql/blob/master/src/java/shadow/pgsql/TypeHandler.java)
+- Binary Format when supported by Type
+- Stuff?
+
 ### Status
 
-- TCP Procotol is implemented and working.
-- Only a handful of [Types](https://github.com/thheller/shadow-pgsql/tree/master/src/java/shadow/pgsql/types) have been implemented. Not enough for basically anything.
-- API has somewhat stabilized (after 10 rewrites)
+- [Basic Types](https://github.com/thheller/shadow-pgsql/tree/master/src/java/shadow/pgsql/types) have been implemented.
+- Query & Statement support
+- Transactions with Savepoints
 
 ### TODO:
 
 - more Types
 - UTF-8 is hardcoded right now, things will go wrong if backend is not UTF-8
 - Tests
-- better Error Handling (especially arround Types)
+- better Errors (Messages)
 - Docs
-- more SSL options
+- SSL (disabled until I figure out how to combine it with java.nio)
 - Auth Support (MD5, ...)
 - Generics (didn't write any serious Java for over 10 years, need to learn Generics first)
 - check Performance (should be faster than JDBC, but needs check to be sure)
-
+- Cursor Support
+- FunctionCall API
+- Copy API
 
 ## Usage
 
-```java
-try (Connection pg = Database.setup("localhost", 5432, "zilence", "shadow_pgsql")
-                             .connect()) {
-  // basic INSERT
-  long rows = pg.execute("INSERT INTO num_types (fint4) VALUES ($1)", 1);
-  
-  // INSERT with SERIAL id, returns generated id
-  SimpleQuery query = new SimpleQuery(
-    "INSERT INTO num_types (fint4) VALUES ($1) RETURNING id"
-  );
-  
-  query.setResultBuilder(Handlers.SINGLE_ROW);
-  query.setRowBuilder(Handlers.SINGLE_COLUMN);
-  
-  int insertedId = (int) pg.executeQuery(query, 1);
-  
-  // SELECT
-  List numTypes = (List) pg.executeQuery("SELECT * FROM num_types");
-}
+Needs more docs, for now check what can hardly be called Tests.
 
-```
-
-Clojure will follow.
+- [Java]:(https://github.com/thheller/shadow-pgsql/blob/master/test/shadow/pgsql/BasicTest.java)
+- [Clojure]:(https://github.com/thheller/shadow-pgsql/blob/master/test/shadow/pgsql_test.clj)
 
 ## License
 

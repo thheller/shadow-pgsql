@@ -71,6 +71,8 @@ public class TypeRegistry {
                 Types.INT4_ARRAY,
                 Types.INT8,
                 Types.INT8_ARRAY,
+                Types.FLOAT4,
+                Types.FLOAT8,
                 Types.OID,
                 Types.NUMERIC,
                 Types.NAME,
