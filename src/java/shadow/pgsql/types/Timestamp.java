@@ -5,6 +5,7 @@ import shadow.pgsql.Connection;
 import shadow.pgsql.ProtocolOutput;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
 
@@ -27,8 +28,8 @@ public abstract class Timestamp extends AbstractDateTime {
     private static final long PG_EPOCH_OFFSET = 946684800000000l;
 
     @Override
-    public Object decodeBinary(Connection con, ColumnInfo field, int colSize) throws IOException {
-        long jd = con.input.stream.readLong() + PG_EPOCH_OFFSET;
+    public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int size) throws IOException {
+        long jd = buf.getLong() + PG_EPOCH_OFFSET;
         long milli = jd / 1000;
         long micros = jd % 1000;
         return OffsetDateTime.ofInstant(Instant.ofEpochMilli(milli).plusNanos(micros * 1000), ZoneOffset.UTC);

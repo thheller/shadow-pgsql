@@ -1,6 +1,5 @@
 package shadow.pgsql.utils;
 
-import shadow.pgsql.ColumnInfo;
 import shadow.pgsql.ResultBuilder;
 
 import java.util.HashMap;
@@ -17,11 +16,12 @@ public abstract class ResultAsMapBuilder implements ResultBuilder {
 
     @Override
     public Object add(Object state, Object o) {
-        ((Map)state).put(getKey(o), getValue(o));
+        ((Map) state).put(getKey(o), getValue(o));
         return state;
     }
 
     public abstract Object getKey(Object row);
+
     public abstract Object getValue(Object row);
 
     @Override

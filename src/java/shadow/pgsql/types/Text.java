@@ -6,6 +6,7 @@ import shadow.pgsql.ProtocolOutput;
 import shadow.pgsql.TypeHandler;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Created by zilence on 11.08.14.
@@ -13,6 +14,7 @@ import java.io.IOException;
 public class Text implements TypeHandler {
     public static interface Conversion {
         public String encode(Object param);
+
         public Object decode(String value);
     }
 
@@ -22,7 +24,7 @@ public class Text implements TypeHandler {
             if (!(param instanceof String)) {
                 throw new IllegalArgumentException(String.format("not a string: %s", param.getClass().getName()));
             }
-            return (String)param;
+            return (String) param;
         }
 
         @Override
@@ -69,9 +71,10 @@ public class Text implements TypeHandler {
     }
 
     @Override
-    public Object decodeBinary(Connection con, ColumnInfo field, int size) throws IOException {
+    public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int size) throws IOException {
+        // FIXME: is this the only way to get a string?
         byte[] bytes = new byte[size];
-        con.input.readFully(bytes);
+        buf.get(bytes);
 
         // FIXME: utf-8
         return conversion.decode(new String(bytes));

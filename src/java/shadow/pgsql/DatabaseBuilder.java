@@ -6,8 +6,8 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
-* Created by zilence on 12.08.14.
-*/
+ * Created by zilence on 12.08.14.
+ */
 public class DatabaseBuilder {
     private String host;
     private int port;

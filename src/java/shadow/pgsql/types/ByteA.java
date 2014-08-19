@@ -6,6 +6,7 @@ import shadow.pgsql.ProtocolOutput;
 import shadow.pgsql.TypeHandler;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Created by zilence on 19.08.14.
@@ -24,17 +25,20 @@ public class ByteA implements TypeHandler {
 
     @Override
     public void encodeBinary(Connection con, ProtocolOutput output, Object param) {
-        if (!(param instanceof byte[])) {
+        if (param instanceof byte[]) {
             // FIXME: support ByteBuffer, InputStream?, ...
+            output.write((byte[]) param);
+        } else if (param instanceof ByteBuffer) {
+            output.put((ByteBuffer) param);
+        } else {
             throw new IllegalArgumentException(String.format("unsupported binary type: %s", param.getClass().getName()));
         }
-        output.write((byte[]) param);
     }
 
     @Override
-    public Object decodeBinary(Connection con, ColumnInfo field, int colSize) throws IOException {
-        final byte[] bytes = new byte[colSize];
-        con.input.readFully(bytes);
+    public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int size) throws IOException {
+        final byte[] bytes = new byte[size];
+        buf.get(bytes);
         return bytes;
     }
 

@@ -1,12 +1,13 @@
 package shadow.pgsql.types;
 
-import shadow.pgsql.Connection;
 import shadow.pgsql.ColumnInfo;
+import shadow.pgsql.Connection;
 import shadow.pgsql.ProtocolOutput;
 import shadow.pgsql.TypeHandler;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.nio.ByteBuffer;
 
 /**
  * Created by zilence on 10.08.14.
@@ -34,22 +35,22 @@ public class Numeric implements TypeHandler {
 
     @Override
     public String encodeToString(Connection con, Object param) {
-        return ((BigDecimal)param).toPlainString();
+        return ((BigDecimal) param).toPlainString();
     }
 
     @Override
-    public Object decodeBinary(Connection con, ColumnInfo field, int colSize) throws IOException {
+    public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int colSize) throws IOException {
         // FIXME: I HAVE NO IDEA WHAT I'M DOING!
 
-        final int ndigits = con.input.stream.readShort();
-        final int weight = con.input.stream.readShort(); // what does this mean?
-        final int sign = con.input.stream.readShort();
-        final int rscale = con.input.stream.readShort(); // pos of decimal point from right
+        final int ndigits = buf.getShort();
+        final int weight = buf.getShort(); // what does this mean?
+        final int sign = buf.getShort();
+        final int rscale = buf.getShort(); // pos of decimal point from right
 
         StringBuilder sb = new StringBuilder();
         int[] digits = new int[ndigits];
         for (int i = 0; i < ndigits; i++) {
-            digits[i] = con.input.stream.readUnsignedShort();
+            digits[i] = buf.getShort();
         }
 
         throw new UnsupportedOperationException("TBD: figure out the rest");

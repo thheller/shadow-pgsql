@@ -2,11 +2,8 @@ package shadow.pgsql.types;
 
 import shadow.pgsql.ColumnInfo;
 import shadow.pgsql.Connection;
-import shadow.pgsql.ProtocolOutput;
 import shadow.pgsql.TypeHandler;
 
-import java.io.IOException;
-import java.time.*;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.TemporalAccessor;
 

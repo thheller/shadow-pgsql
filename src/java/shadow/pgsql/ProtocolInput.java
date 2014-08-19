@@ -1,33 +1,38 @@
 package shadow.pgsql;
 
-import java.io.DataInputStream;
+import java.io.EOFException;
 import java.io.IOException;
-import java.util.ArrayList;
+import java.nio.ByteBuffer;
+import java.nio.channels.SocketChannel;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
  * Created by zilence on 10.08.14.
  */
 public class ProtocolInput {
+    // FIXME: find a good default buffer size, this may be too much but shouldn't hurt.
+    private static final int BUFFER_SIZE = 65536;
+
     private final Connection pg;
-    public final DataInputStream stream;
+    public final SocketChannel channel;
 
-    public ProtocolInput(Connection pg, DataInputStream stream) {
+    private final ByteBuffer frame = ByteBuffer.allocateDirect(5); // 1 byte command, 4 byte size
+    private final ByteBuffer defaultBuffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
+
+    public ByteBuffer current = defaultBuffer;
+    public int currentSize = 0;
+
+    public ProtocolInput(Connection pg, SocketChannel channel) {
         this.pg = pg;
-        this.stream = stream;
-    }
-
-    public DataInputStream getStream() {
-        return stream;
+        this.channel = channel;
     }
 
     String readString() throws IOException {
         StringBuffer sbuf = new StringBuffer();
         byte b;
         while (true) {
-            b = stream.readByte();
+            b = current.get();
             if (b == 0) {
                 return sbuf.toString();
             } else {
@@ -40,7 +45,7 @@ public class ProtocolInput {
         final Map<String, String> errorData = new HashMap<>();
 
         while (true) {
-            final byte fieldType = stream.readByte();
+            final byte fieldType = current.get();
             if (fieldType == 0) {
                 return errorData;
             } else {
@@ -49,12 +54,22 @@ public class ProtocolInput {
         }
     }
 
-    Map<String, String> readErrorData() throws IOException {
-        final int size = stream.readInt();
-        return readMessages();
-    }
+    private void fillBuffer(ByteBuffer target, int size) throws IOException {
+        int read = 0;
+        do {
+            int x = channel.read(target);
+            if (x == -1) {
+                throw new EOFException();
+            }
+            read += x;
+        } while (read < size);
 
-    //
+        if (read != size) {
+            throw new IllegalStateException("partial buffer");
+        }
+
+        target.flip();
+    }
 
     /**
      * reads next command byte
@@ -71,38 +86,56 @@ public class ProtocolInput {
         }
 
         while (true) {
-            final char type = (char) stream.readByte();
+            frame.clear();
 
-            switch (type) {
-                case 'N': // NoticeResponse
-                {
-                    final int size = stream.readInt();
-                    pg.handleNotice(readMessages());
-                    break;
-                }
-                case 'A': // NotificationResponse
-                {
-                    final int size = stream.readInt();
+            fillBuffer(frame, 5);
 
-                    final int processId = stream.readInt();
-                    final String channel = readString();
-                    final String payload = readString();
-                    pg.handleNotify(processId, channel, payload);
-                    break;
+            final char type = (char) frame.get();
+            final int size = currentSize = frame.getInt() - 4; // size includes itself
+
+            // FIXME: worth skipping?
+            if (size == 0) {
+                this.current = null;
+                return type;
+            } else {
+                if (size > BUFFER_SIZE) {
+                    // oversized packet, allocate new buffer
+                    // FIXME: is this really the best strategy here? at least make it configurable
+                    current = ByteBuffer.allocateDirect(size);
+                } else {
+                    // otherwise use a default, keeps allocations down to a minimum
+                    current = defaultBuffer;
+                    current.clear();
+                    current.limit(size);
                 }
-                default:
-                    return type;
+
+                fillBuffer(current, size);
+
+                switch (type) {
+                    case 'N': // NoticeResponse
+                    {
+                        pg.handleNotice(readMessages());
+                        break;
+                    }
+                    case 'A': // NotificationResponse
+                    {
+                        final int processId = current.getInt();
+                        final String channel = readString();
+                        final String payload = readString();
+                        pg.handleNotify(processId, channel, payload);
+                        break;
+                    }
+                    default:
+                        return type;
+                }
             }
         }
     }
 
     void readReadyForQuery() throws IOException {
-        final int size = readInt32();
-        if (size != 5) {
-            throw new IllegalStateException(String.format("ReadyForQuery was not size 5 (was %d)", size));
-        }
+        checkSize("ReadyForQuery", 1);
 
-        final char backendState = (char) stream.readByte();
+        final char backendState = (char) current.get();
         switch (backendState) {
             case 'I':
                 pg.txState = TransactionStatus.IDLE;
@@ -122,19 +155,18 @@ public class ProtocolInput {
     }
 
     ColumnInfo[] readRowDescription() throws IOException {
-        final int size = readInt32();
-        final int fields = readInt16();
+        final int fields = getShort();
 
         ColumnInfo[] columnInfos = new ColumnInfo[fields];
 
         for (int i = 0; i < fields; i++) {
             String name = readString();
-            int tableOid = stream.readInt();
-            int tablePos = stream.readShort();
-            int typeOid = stream.readInt();
-            int typeSize = stream.readShort();
-            int typeMod = stream.readInt();
-            int format = stream.readShort(); // unreliable info, we might overwrite it, should not be needed by anyone anyway
+            int tableOid = current.getInt();
+            int tablePos = current.getShort();
+            int typeOid = current.getInt();
+            int typeSize = current.getShort();
+            int typeMod = current.getInt();
+            int format = current.getShort(); // unreliable info, we might overwrite it, should not be needed by anyone anyway
 
             columnInfos[i] = new ColumnInfo(name, tableOid, tablePos, typeOid, typeSize, typeMod);
         }
@@ -143,30 +175,25 @@ public class ProtocolInput {
     }
 
     int[] readParameterDescription() throws IOException {
-        final int size = readInt32();
-        final int count = readInt16();
+        final int count = getShort();
 
         final int[] oids = new int[count];
         for (int i = 0; i < count; i++) {
-            oids[i] = stream.readInt();
+            oids[i] = current.getInt();
         }
         return oids;
     }
 
-    public int readInt32() throws IOException {
-        return stream.readInt();
+    public int getInt() throws IOException {
+        return current.getInt();
     }
 
-    public int readInt16() throws IOException {
-        return stream.readShort();
+    public int getShort() throws IOException {
+        return current.getShort();
     }
 
-    public void close() throws IOException {
-        stream.close();
-    }
-
-    public void readFully(byte[] data) throws IOException {
-        stream.readFully(data);
+    public void getBytes(byte[] data) throws IOException {
+        current.get(data);
     }
 
     public StatementResult readStatementResult() throws IOException {
@@ -179,14 +206,10 @@ public class ProtocolInput {
             switch (type) {
                 case '2': // BindComplete
                 {
-                    final int size = readInt32();
-                    if (size != 4) {
-                        throw new IllegalStateException(String.format("BindComplete was not size 4 (was %d)", size));
-                    }
+                    checkSize("BindComplete", 0);
                     break;
                 }
                 case 'C': { // CommandComplete
-                    final int size = readInt32();
                     final String tag = readString();
 
                     result = new StatementResult(tag);
@@ -203,5 +226,11 @@ public class ProtocolInput {
         }
 
         return result;
+    }
+
+    public void checkSize(String message, int expected) {
+        if (currentSize != expected) {
+            throw new IllegalStateException(String.format("%s was not size %d (was %d)", message, expected, currentSize));
+        }
     }
 }

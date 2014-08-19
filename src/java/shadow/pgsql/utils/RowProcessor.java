@@ -4,9 +4,9 @@ import shadow.pgsql.ResultBuilder;
 
 /**
  * Simple ResultBuilder that does not accumulate a Result.
- *
+ * <p/>
  * Instead you implement process(ROW)
- *
+ * <p/>
  * Returns the number of rows processed
  *
  * @author Thomas Heller

@@ -1,8 +1,8 @@
 package shadow.pgsql.types;
 
 /**
-* Created by zilence on 09.08.14.
-*/
+ * Created by zilence on 09.08.14.
+ */
 public interface ArrayReader<G, A, T> {
     G init(int size);
 

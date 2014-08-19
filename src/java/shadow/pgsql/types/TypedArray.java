@@ -1,13 +1,13 @@
 package shadow.pgsql.types;
 
-import shadow.pgsql.Connection;
 import shadow.pgsql.ColumnInfo;
+import shadow.pgsql.Connection;
 import shadow.pgsql.ProtocolOutput;
 import shadow.pgsql.TypeHandler;
 
-import java.io.DataInputStream;
 import java.io.IOException;
 import java.lang.reflect.Array;
+import java.nio.ByteBuffer;
 
 /**
  * Created by zilence on 10.08.14.
@@ -108,12 +108,10 @@ public class TypedArray implements TypeHandler {
     }
 
     @Override
-    public Object decodeBinary(Connection con, ColumnInfo field, int colSize) throws IOException {
-        final DataInputStream in = con.input.stream;
-
-        final int dimensions = in.readInt();
-        final boolean hasNull = in.readInt() == 1;
-        final int elementOid = in.readInt();
+    public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int colSize) throws IOException {
+        final int dimensions = buf.getInt();
+        final boolean hasNull = buf.getInt() == 1;
+        final int elementOid = buf.getInt();
 
         int itemCount = 0;
 
@@ -121,19 +119,19 @@ public class TypedArray implements TypeHandler {
         int[] dimensionBounds = new int[dimensions];
 
         for (int i = 0; i < dimensions; i++) {
-            int dimensionSize = dimensionSizes[i] = in.readInt();
-            dimensionBounds[i] = in.readInt();
+            int dimensionSize = dimensionSizes[i] = buf.getInt();
+            dimensionBounds[i] = buf.getInt();
             itemCount += dimensionSize;
         }
 
         if (dimensions == 1) {
             Object result = arrayReader.init(dimensionSizes[0]);
             for (int i = 0; i < itemCount; i++) {
-                final int itemSize = in.readInt();
+                final int itemSize = buf.getInt();
                 if (itemSize == -1) {
                     result = arrayReader.addNull(result, i);
                 } else {
-                    result = arrayReader.add(result, i, itemType.decodeBinary(con, field, itemSize));
+                    result = arrayReader.add(result, i, itemType.decodeBinary(con, field, buf, itemSize));
                 }
             }
 

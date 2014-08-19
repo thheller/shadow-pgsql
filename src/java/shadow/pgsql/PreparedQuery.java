@@ -48,16 +48,12 @@ public class PreparedQuery extends PreparedBase {
             switch (type) {
                 case '2': // BindComplete
                 {
-                    final int size = pg.input.readInt32();
-                    if (size != 4) {
-                        throw new IllegalStateException("BindComplete was not size 4 (was %d)");
-                    }
+                    pg.input.checkSize("BindComplete", 0);
                     break;
                 }
                 case 'D':  // DataRow
                 {
-                    final int size = pg.input.readInt32();
-                    final int cols = pg.input.readInt16();
+                    final int cols = pg.input.getShort();
 
                     if (cols != columnInfos.length) {
                         throw new IllegalStateException(
@@ -71,17 +67,22 @@ public class PreparedQuery extends PreparedBase {
                         ColumnInfo field = columnInfos[i];
                         TypeHandler decoder = typeDecoders[i];
 
-                        final int colSize = pg.input.readInt32();
+                        final int colSize = pg.input.getInt();
 
                         Object value = null;
 
                         if (colSize != -1) {
                             if (decoder.supportsBinary()) {
-                                value = decoder.decodeBinary(pg, field, colSize);
-                                // FIXME: verify that all bytes were consumed, makes me question using InputStreams ...
+                                int mark = pg.input.current.position();
+
+                                value = decoder.decodeBinary(pg, field, pg.input.current, colSize);
+
+                                if (pg.input.current.position() != mark + colSize) {
+                                    throw new IllegalStateException(String.format("Field:[%s ,%s] did not consume all bytes", field.name, decoder));
+                                }
                             } else {
                                 byte[] bytes = new byte[colSize];
-                                pg.input.readFully(bytes);
+                                pg.input.getBytes(bytes);
 
                                 // FIXME: assumes UTF-8
                                 final String stringValue = new String(bytes);
@@ -96,9 +97,7 @@ public class PreparedQuery extends PreparedBase {
                     break;
                 }
                 case 'C': { // CommandComplete
-                    final int size = pg.input.readInt32();
                     final String tag = pg.input.readString();
-
                     complete = true;
 
                     // FIXME: losing information (tag)
@@ -109,9 +108,8 @@ public class PreparedQuery extends PreparedBase {
                     pg.input.readReadyForQuery();
                     break RESULT_LOOP;
                 }
-                case 'E':
-                {
-                    errorData = pg.input.readErrorData();
+                case 'E': {
+                    errorData = pg.input.readMessages();
                     break;
                 }
                 default: {

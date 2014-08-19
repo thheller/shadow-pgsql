@@ -2,8 +2,7 @@ package shadow.pgsql;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.io.OutputStream;
+import java.nio.channels.SocketChannel;
 import java.util.Stack;
 
 /**
@@ -13,8 +12,7 @@ public class ProtocolOutput {
     // FIXME: whats a good default size?
     // don't want too much resizing, its fine to reserve some memory
     public static final int BLOCK_SIZE = 16384;
-    private byte bytes[];
-    private int position;
+    private ByteBuffer out = ByteBuffer.allocateDirect(BLOCK_SIZE);
 
     static class Mark {
         final int position;
@@ -29,17 +27,23 @@ public class ProtocolOutput {
     }
 
     private final Stack<Mark> marks = new Stack<>();
-    private final OutputStream target;
 
-    public ProtocolOutput(OutputStream target) {
-        this.target = target;
-        bytes = new byte[BLOCK_SIZE];
+    private final Connection connection;
+    private final SocketChannel channel;
+
+    public ProtocolOutput(Connection con, SocketChannel channel) {
+        this.connection = con;
+        this.channel = channel;
     }
 
     private void maybeGrow(int bytesComing) {
-        if (this.position + bytesComing > bytes.length) {
-            // FIXME: grows at least by BLOCK_SIZE, should maybe be more dynamic?
-            bytes = Arrays.copyOf(bytes, bytes.length + Math.max(bytesComing, BLOCK_SIZE));
+        if (this.out.position() + bytesComing > this.out.capacity()) {
+            ByteBuffer larger = ByteBuffer.allocate(this.out.capacity() + BLOCK_SIZE);
+
+            out.flip();
+            larger.put(out);
+
+            this.out = larger;
         }
     }
 
@@ -75,10 +79,10 @@ public class ProtocolOutput {
     }
 
     void begin(int size, boolean includeSize) {
-        marks.push(new Mark(position, size, includeSize));
+        marks.push(new Mark(out.position(), size, includeSize));
         // write placeholder size, 4 bytes
         maybeGrow(size);
-        this.position += size;
+        out.putInt(0);
     }
 
     public void complete() {
@@ -86,12 +90,12 @@ public class ProtocolOutput {
             throw new IllegalStateException("no marks");
         }
 
-        final int pos = position;
+        final int pos = out.position();
         final Mark mark = marks.pop();
-        this.position = mark.position;
-        final int size = pos - position;
+        out.position(mark.position);
+        final int size = pos - mark.position;
         int32(mark.includeSize ? size : (size - mark.size));
-        this.position = pos;
+        out.position(pos);
     }
 
     // not public, only connection or query should call this
@@ -100,53 +104,48 @@ public class ProtocolOutput {
             throw new IllegalStateException("marks not empty!");
         }
 
-        target.write(bytes, 0, position);
-        target.flush();
-
+        out.flip();
+        int written = channel.write(out);
+        if (written != out.limit()) {
+            // FIXME: loop
+            throw new IllegalStateException("partial write");
+        }
         reset();
     }
 
     void reset() {
         this.marks.clear();
-        this.position = 0;
+        this.out.clear();
     }
 
     public void int64(long val) {
         maybeGrow(8);
-        bytes[position] = (byte) (val >>> 52);
-        bytes[position + 1] = (byte) (val >>> 48);
-        bytes[position + 2] = (byte) (val >>> 40);
-        bytes[position + 3] = (byte) (val >>> 32);
-        bytes[position + 4] = (byte) (val >>> 24);
-        bytes[position + 5] = (byte) (val >>> 16);
-        bytes[position + 6] = (byte) (val >>> 8);
-        bytes[position + 7] = (byte) (val);
-
-        this.position += 8;
+        out.putLong(val);
     }
 
     public void int32(int val) {
         maybeGrow(4);
-        bytes[position] = (byte) (val >>> 24);
-        bytes[position + 1] = (byte) (val >>> 16);
-        bytes[position + 2] = (byte) (val >>> 8);
-        bytes[position + 3] = (byte) (val);
-
-        this.position += 4;
+        out.putInt(val);
     }
 
     public void int16(short val) {
         maybeGrow(2);
-        bytes[position] = (byte) (val >>> 8);
-        bytes[position + 1] = (byte) val;
-
-        this.position += 2;
+        out.putShort(val);
     }
 
     public void int8(int b) {
         maybeGrow(1);
-        bytes[position] = (byte) b;
-        position += 1;
+        out.put((byte) b);
+    }
+
+    public void float4(float value) {
+        maybeGrow(4);
+        out.putFloat(value);
+    }
+
+    public void float8(double value) {
+        maybeGrow(8);
+        out.putDouble(value);
     }
 
     // aka empty string
@@ -170,19 +169,15 @@ public class ProtocolOutput {
     }
 
     public void write(byte[] in) {
-        write(in, 0, in.length);
+        maybeGrow(in.length);
+        out.put(in);
     }
 
-    public void write(byte[] in, int offset, int length) {
-        // not sure I need this check
-        if (offset < 0 || offset > in.length || length < 0 || (offset + length) - in.length > 0) {
-            throw new IndexOutOfBoundsException();
-        }
-
-        maybeGrow(length);
-        System.arraycopy(in, offset, bytes, position, length);
-        position += length;
+    public void put(ByteBuffer in) {
+        maybeGrow(in.remaining());
+        out.put(in);
     }
+
 
 
     /**
@@ -190,13 +185,9 @@ public class ProtocolOutput {
      * someone didn't flush if it is
      */
     void checkReset() {
-        if (position != 0) {
-            throw new IllegalStateException(String.format("expected buffer position to be at 0 but is at %d", position));
+        if (out.position() != 0) {
+            throw new IllegalStateException(String.format("expected buffer position to be at 0 but is at %d", out.position()));
         }
-    }
-
-    void close() throws IOException {
-        target.close();
     }
 }
 

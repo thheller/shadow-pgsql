@@ -6,6 +6,7 @@ import shadow.pgsql.ProtocolOutput;
 import shadow.pgsql.TypeHandler;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Created by zilence on 19.08.14.
@@ -33,8 +34,8 @@ public class Bool implements TypeHandler {
     }
 
     @Override
-    public Object decodeBinary(Connection con, ColumnInfo field, int colSize) throws IOException {
-        return con.input.stream.read() != 0;
+    public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int size) throws IOException {
+        return buf.get() != 0;
     }
 
     @Override

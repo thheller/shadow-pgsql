@@ -1,8 +1,8 @@
 package shadow.pgsql;
 
 /**
-* Created by zilence on 09.08.14.
-*/
+ * Created by zilence on 09.08.14.
+ */
 public class ColumnInfo {
     public final String name;
     public final int tableOid;

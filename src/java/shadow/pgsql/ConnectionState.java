@@ -1,8 +1,8 @@
 package shadow.pgsql;
 
 /**
-* Created by zilence on 10.08.14.
-*/
+ * Created by zilence on 10.08.14.
+ */
 public enum ConnectionState {
     CONNECTED,
     START_UP,

@@ -3,8 +3,8 @@ package shadow.pgsql;
 import java.io.IOException;
 
 /**
-* Created by zilence on 13.08.14.
-*/
+ * Created by zilence on 13.08.14.
+ */
 public class Savepoint {
     private final Connection con;
     private final String name;

@@ -2,13 +2,9 @@ package shadow.pgsql;
 
 import shadow.pgsql.utils.RowProcessor;
 
-import javax.net.ssl.SSLSocket;
-import javax.net.ssl.SSLSocketFactory;
-import java.io.BufferedOutputStream;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.net.Socket;
-import java.util.ArrayList;
+import java.net.InetSocketAddress;
+import java.nio.channels.SocketChannel;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -16,7 +12,7 @@ import java.util.Map;
 /**
  * Describes a remote Postgresql Database backend which you can
  * connect to.
- *
+ * <p/>
  * Can and should be shared between threads once constructed, use DatabaseBuilder or setup shortcut
  *
  * @author Thomas Heller
@@ -78,9 +74,12 @@ public class Database {
 
     public Connection connect() throws IOException {
         Connection pg = null;
-        Socket socket = new Socket(host, port);
+
+        SocketChannel channel = SocketChannel.open(new InetSocketAddress(host, port));
 
         if (ssl) {
+            /*
+            Socket socket = new Socket(host, port);
             DataOutputStream out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream(), 8));
             out.writeInt(8); // 4+4 (message size)
             out.writeInt(80877103); // ssl code
@@ -100,9 +99,10 @@ public class Database {
             ssl.startHandshake();
 
             pg = new Connection(this, ssl);
-
+            */
+            throw new UnsupportedOperationException("NIO ssl, need to check that out first");
         } else {
-            pg = new Connection(this, socket);
+            pg = new Connection(this, channel);
         }
 
         pg.startup(connectParams, authHandler);
@@ -131,17 +131,17 @@ public class Database {
         }
 
         SimpleQuery schema = new SimpleQuery("SELECT" +
-                        "  a.attname," + // column name
-                        "  a.attnum," + // column index
-                        "  b.oid," + // table oid
-                        "  b.relname" + // table name
-                        " FROM pg_class b" +
-                        " JOIN pg_attribute a" +
-                        " ON a.attrelid = b.oid" +
-                        " WHERE b.relkind = 'r'" +
-                        " AND a.attnum > 0" +
-                        " AND b.relname NOT LIKE 'pg_%'" +
-                        " AND b.relname NOT LIKE 'sql_%'"
+                "  a.attname," + // column name
+                "  a.attnum," + // column index
+                "  b.oid," + // table oid
+                "  b.relname" + // table name
+                " FROM pg_class b" +
+                " JOIN pg_attribute a" +
+                " ON a.attrelid = b.oid" +
+                " WHERE b.relkind = 'r'" +
+                " AND a.attnum > 0" +
+                " AND b.relname NOT LIKE 'pg_%'" +
+                " AND b.relname NOT LIKE 'sql_%'"
         );
 
         schema.setRowBuilder(Helpers.ROW_AS_LIST);

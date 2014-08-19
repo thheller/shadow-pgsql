@@ -8,10 +8,10 @@ import java.io.IOException;
 public interface AuthHandler {
     /**
      * should handle the Authentication method requested by the backend
-     *
+     * <p/>
      * may require some network traffic, should return once the negotiation is complete
      * and the backend is ready to proceed normally
-     *
+     * <p/>
      * should throw when authentication is not supported or possible
      *
      * @param con

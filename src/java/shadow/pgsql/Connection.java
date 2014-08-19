@@ -1,8 +1,11 @@
 package shadow.pgsql;
 
-import java.io.*;
-import java.net.Socket;
-import java.util.*;
+import java.io.IOException;
+import java.nio.channels.SocketChannel;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Primary Inteface to talk to the backend, usually obtained via Database
@@ -16,7 +19,7 @@ public class Connection implements AutoCloseable {
     private int savepointId = 0;
 
     private final Database db;
-    private final Socket socket;
+    private final SocketChannel socket;
 
     public ProtocolOutput output;
     public ProtocolInput input;
@@ -26,15 +29,13 @@ public class Connection implements AutoCloseable {
     ConnectionState state;
     TransactionStatus txState;
 
-    Connection(Database db, Socket socket) throws IOException {
+    Connection(Database db, SocketChannel socket) throws IOException {
         this.db = db;
         this.socket = socket;
 
         // FIXME: should use SocketChannel and ByteBuffer, might be more efficient
-        DataInputStream in = new DataInputStream(new BufferedInputStream(socket.getInputStream()));
-        DataOutputStream out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream()));
-        this.input = new ProtocolInput(this, in);
-        this.output = new ProtocolOutput(out);
+        this.input = new ProtocolInput(this, socket);
+        this.output = new ProtocolOutput(this, socket);
 
         this.state = ConnectionState.CONNECTED;
     }
@@ -85,27 +86,27 @@ public class Connection implements AutoCloseable {
             switch (type) {
                 case 'R': // AuthenticationOk
                 {
-                    final int size = input.readInt32();
-                    final int code = input.readInt32();
+                    final int code = input.getInt();
                     if (code != 0 && authHandler == null) {
                         throw new IllegalStateException("authentication requires AuthHandler");
                     }
 
+                    /*
                     final int dataLen = size - 8;
                     if (dataLen > 0) {
                         byte[] data = new byte[dataLen];
-                        input.readFully(data);
+                        input.getBytes(data);
 
                         this.state = ConnectionState.AUTHENTICATING;
                         authHandler.doAuth(this, code, data);
                     }
+                    */
 
                     this.state = ConnectionState.START_UP;
                     break;
                 }
                 case 'S': // ParameterStatus
                 {
-                    final int size = input.readInt32();
                     final String parameterName = input.readString();
                     final String parameterValue = input.readString();
                     this.parameters.put(parameterName, parameterValue);
@@ -114,15 +115,14 @@ public class Connection implements AutoCloseable {
                 }
                 case 'K': // BackendKeyData
                 {
-                    final int size = input.readInt32();
-                    final int processId = input.readInt32();
-                    final int secretKey = input.readInt32();
+                    final int processId = input.getInt();
+                    final int secretKey = input.getInt();
 
                     // FIXME: store this somewhere, needed for query cancel
                     break;
                 }
                 case 'E': {
-                    errorData = input.readErrorData();
+                    errorData = input.readMessages();
                     break;
                 }
                 case 'Z': {
@@ -247,10 +247,7 @@ public class Connection implements AutoCloseable {
             switch (type) {
                 case '1': // ParseComplete
                 {
-                    final int size = input.readInt32();
-                    if (size != 4) {
-                        throw new IllegalStateException(String.format("ParseComplete was not size 4 (was %d)", size));
-                    }
+                    input.checkSize("ParseComplete", 0);
                     parsed = true;
                     break;
                 }
@@ -261,7 +258,6 @@ public class Connection implements AutoCloseable {
                 }
                 case 'n': // NoData
                 {
-                    final int size = input.readInt32();
                     break;
                 }
                 case 'Z': // ReadyForQuery
@@ -271,7 +267,7 @@ public class Connection implements AutoCloseable {
                 }
                 case 'E': // Error
                 {
-                    errorData = input.readErrorData();
+                    errorData = input.readMessages();
                     break;
                 }
                 default:
@@ -330,10 +326,7 @@ public class Connection implements AutoCloseable {
             switch (type) {
                 case '1': // ParseComplete
                 {
-                    final int size = input.readInt32();
-                    if (size != 4) {
-                        throw new IllegalStateException(String.format("ParseComplete was not size 4 (was %d)", size));
-                    }
+                    input.checkSize("ParseComplete", 0);
                     parsed = true;
                     break;
                 }
@@ -354,12 +347,11 @@ public class Connection implements AutoCloseable {
                 }
                 case 'E': // Error
                 {
-                    errorData = input.readErrorData();
+                    errorData = input.readMessages();
                     break;
                 }
                 case 'n': // NoData
                 {
-                    final int size = input.readInt32();
                     noData = true;
                     break;
                 }
@@ -465,10 +457,7 @@ public class Connection implements AutoCloseable {
 
         this.state = ConnectionState.CLOSED;
 
-        output.close();
-        input.close();
         socket.close();
-
     }
 
     public void closeQuery(String statementId) throws IOException {
@@ -496,15 +485,12 @@ public class Connection implements AutoCloseable {
             switch (type) {
                 case '3': // CloseComplete
                 {
-                    final int size = input.readInt32();
-                    if (size != 4) {
-                        throw new IllegalStateException(String.format("CloseComplete should be size 4 (was %d)", size));
-                    }
+                    input.checkSize("CloseComplete", 0);
                     closed = true;
                     break;
                 }
                 case 'E': {
-                    errorData = input.readErrorData();
+                    errorData = input.readMessages();
                     break;
                 }
                 case 'Z': // ReadyForQuery

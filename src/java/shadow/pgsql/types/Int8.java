@@ -1,11 +1,12 @@
 package shadow.pgsql.types;
 
-import shadow.pgsql.Connection;
 import shadow.pgsql.ColumnInfo;
+import shadow.pgsql.Connection;
 import shadow.pgsql.ProtocolOutput;
 import shadow.pgsql.TypeHandler;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 
 /**
  * Created by zilence on 10.08.14.
@@ -46,8 +47,8 @@ public class Int8 implements TypeHandler {
     }
 
     @Override
-    public Object decodeBinary(Connection con, ColumnInfo field, int colSize) throws IOException {
-        return con.input.stream.readLong();
+    public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int size) throws IOException {
+        return buf.getLong();
     }
 
     @Override

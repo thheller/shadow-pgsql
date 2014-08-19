@@ -1,8 +1,8 @@
 package shadow.pgsql;
 
 /**
-* Created by zilence on 13.08.14.
-*/
+ * Created by zilence on 13.08.14.
+ */
 public class StatementResult {
     final String tag;
 

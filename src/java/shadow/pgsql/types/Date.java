@@ -5,6 +5,7 @@ import shadow.pgsql.Connection;
 import shadow.pgsql.ProtocolOutput;
 
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
@@ -34,13 +35,13 @@ public class Date extends AbstractDateTime {
             throw new IllegalArgumentException(String.format("not a localdate: %s", param.getClass().getName()));
         }
 
-        int days = (int) ChronoUnit.DAYS.between(PG_DATE_BASE, (LocalDate)param);
+        int days = (int) ChronoUnit.DAYS.between(PG_DATE_BASE, (LocalDate) param);
         output.int32(days);
     }
 
     @Override
-    public Object decodeBinary(Connection con, ColumnInfo field, int colSize) throws IOException {
-        int days = con.input.readInt32();
+    public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int colSize) throws IOException {
+        int days = buf.getInt();
         return PG_DATE_BASE.plusDays(days);
     }
 
