@@ -80,7 +80,8 @@ public class TypeRegistry {
                 Types.VARCHAR_ARRAY,
                 Types.TIMESTAMP,
                 Types.TIMESTAMPTZ,
-                Types.DATE
+                Types.DATE,
+                Types.BYTEA
         };
 
         for (TypeHandler t : defaults) {

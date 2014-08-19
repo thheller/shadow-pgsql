@@ -1,8 +1,11 @@
 package shadow.pgsql.types;
 
+import shadow.pgsql.Connection;
+
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeFormatterBuilder;
 import java.time.temporal.ChronoField;
@@ -14,7 +17,7 @@ import java.time.temporal.TemporalAccessor;
 public class Types {
     // how do you define variable length fields in text
     // "yyyy-MM-dd HH:mm:ss.SSS"
-    public static final DateTime TIMESTAMP = new DateTime(1114,
+    public static final AbstractDateTime TIMESTAMP = new Timestamp(1114,
             new DateTimeFormatterBuilder()
                     .appendValue(ChronoField.YEAR, 4)
                     .appendLiteral("-")
@@ -27,15 +30,16 @@ public class Types {
                     .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
                     .appendLiteral(":")
                     .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
-                    .appendFraction(ChronoField.MILLI_OF_SECOND, 0, 6, true)
+                    .appendFraction(ChronoField.MICRO_OF_SECOND, 0, 6, true)
                     .toFormatter()
     ) {
         @Override
-        protected Object convertParsed(TemporalAccessor temporal) {
-            return LocalDateTime.from(temporal);
+        protected Object convertParsed(Connection con, TemporalAccessor temporal) {
+            // always return with timezone, just not worth it to use localdatetime
+            return LocalDateTime.from(temporal).atZone(ZoneId.of(con.getParameterValue("TimeZone"))).toOffsetDateTime();
         }
     };
-    public static final DateTime TIMESTAMPTZ = new DateTime(1184,
+    public static final AbstractDateTime TIMESTAMPTZ = new Timestamp(1184,
             new DateTimeFormatterBuilder()
                     .appendValue(ChronoField.YEAR, 4)
                     .appendLiteral("-")
@@ -48,21 +52,16 @@ public class Types {
                     .appendValue(ChronoField.MINUTE_OF_HOUR, 2)
                     .appendLiteral(":")
                     .appendValue(ChronoField.SECOND_OF_MINUTE, 2)
-                    .appendFraction(ChronoField.MILLI_OF_SECOND, 0, 6, true)
+                    .appendFraction(ChronoField.MICRO_OF_SECOND, 0, 6, true)
                     .appendOffset("+HHmm", "+00")
                     .toFormatter()
     ) {
         @Override
-        protected Object convertParsed(TemporalAccessor temporal) {
+        protected Object convertParsed(Connection con, TemporalAccessor temporal) {
             return OffsetDateTime.from(temporal);
         }
     };
-    public static final DateTime DATE = new DateTime(1082, DateTimeFormatter.ISO_DATE){
-        @Override
-        protected Object convertParsed(TemporalAccessor temporal) {
-            return LocalDate.from(temporal);
-        }
-    };
+    public static final AbstractDateTime DATE = new Date();
 
     public static final Int2 INT2 = new Int2(21);
     public static final TypedArray INT2_ARRAY = new TypedArray(1005, INT2, TypedArray.makeReader(Short.TYPE));
@@ -82,4 +81,7 @@ public class Types {
     public static final Text CHAR = new Text(1042);
     public static final Text VARCHAR = new Text(1043);
     public static final TypedArray VARCHAR_ARRAY = new TypedArray(1015, VARCHAR, TypedArray.makeReader(String.class));
+
+
+    public static final ByteA BYTEA = new ByteA();
 }

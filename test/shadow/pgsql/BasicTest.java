@@ -115,7 +115,8 @@ public class BasicTest {
     @Test
     public void testTimestamp() throws IOException {
         try (PreparedQuery pq = roundtripQuery("timestamp_types", "ftimestamp")) {
-            roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 0)); // pg only has micros
+            // pg only has micros
+            roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 0));
             roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 1000));
             roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 12000));
             roundtripLocalDateTime(pq, LocalDateTime.of(2014, 1, 1, 1, 1, 1, 123000));
@@ -130,10 +131,11 @@ public class BasicTest {
         assertTrue(obj.isEqual(result));
     }
 
-    // @Test
+    @Test
     public void testDate() throws IOException {
         try (PreparedQuery pq = roundtripQuery("timestamp_types", "fdate")) {
             roundtripLocalDate(pq, LocalDate.now());
+            roundtripLocalDate(pq, LocalDate.of(1979, 1, 1));
         }
     }
 
@@ -148,7 +150,7 @@ public class BasicTest {
     @Test
     public void testInt2Array() throws IOException {
         try (PreparedQuery pq = roundtripQuery("array_types", "aint2")) {
-            short[] send = new short[] {1,2,3};
+            short[] send = new short[]{1, 2, 3};
             short[] recv = (short[]) pq.executeWith(send);
             assertArrayEquals(send, recv);
         }
@@ -157,7 +159,7 @@ public class BasicTest {
     @Test
     public void testInt4Array() throws IOException {
         try (PreparedQuery pq = roundtripQuery("array_types", "aint4")) {
-            int[] send = new int[] {1,2,3};
+            int[] send = new int[]{1, 2, 3};
             int[] recv = (int[]) pq.executeWith(send);
 
             assertArrayEquals(send, recv);
@@ -167,8 +169,18 @@ public class BasicTest {
     @Test
     public void testInt8Array() throws IOException {
         try (PreparedQuery pq = roundtripQuery("array_types", "aint8")) {
-            long[] send = new long[] {1,2,3};
+            long[] send = new long[]{1, 2, 3};
             long[] recv = (long[]) pq.executeWith(send);
+
+            assertArrayEquals(send, recv);
+        }
+    }
+
+    @Test
+    public void testByteA() throws IOException {
+        try (PreparedQuery pq = roundtripQuery("binary_types", "fbytea")) {
+            byte[] send = new byte[]{0,1,3,3,7,0};
+            byte[] recv = (byte[]) pq.executeWith(send);
 
             assertArrayEquals(send, recv);
         }
@@ -177,7 +189,7 @@ public class BasicTest {
     @Test
     public void testTextArray() throws IOException {
         try (PreparedQuery pq = roundtripQuery("array_types", "atext")) {
-            String[] send = new String[] {"1","2","3"};
+            String[] send = new String[]{"1", "2", "3"};
 
             // lol varargs ...
             List params = new ArrayList();

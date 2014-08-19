@@ -3,38 +3,23 @@ package shadow.pgsql.types;
 import shadow.pgsql.ColumnInfo;
 import shadow.pgsql.Connection;
 import shadow.pgsql.ProtocolOutput;
-import shadow.pgsql.TypeHandler;
 
 import java.io.IOException;
 import java.time.*;
 import java.time.format.DateTimeFormatter;
-import java.time.temporal.TemporalAccessor;
 
 /**
- * Created by zilence on 14.08.14.
+ * Created by zilence on 19.08.14.
  */
-public abstract class DateTime implements TypeHandler {
-    private final int oid;
-    private final DateTimeFormatter format;
+public abstract class Timestamp extends AbstractDateTime {
 
-    protected DateTime(int oid, DateTimeFormatter format) {
-        this.oid = oid;
-        this.format = format;
-    }
-
-    @Override
-    public int getTypeOid() {
-        return oid;
+    protected Timestamp(int oid, DateTimeFormatter format) {
+        super(oid, format);
     }
 
     @Override
     public boolean supportsBinary() {
-        return false;
-    }
-
-    @Override
-    public String encodeToString(Connection con, Object param) {
-        return format.format((TemporalAccessor) param);
+        return true;
     }
 
     // timestamps are number of microseconds from 2000-01-01 00:00:00.000000
@@ -78,12 +63,5 @@ public abstract class DateTime implements TypeHandler {
         long micros = ((n / 1000) % 1000);
         long ts = ((milli * 1000) + micros) - PG_EPOCH_OFFSET;
         output.int64(ts);
-    }
-
-    protected abstract Object convertParsed(TemporalAccessor temporal);
-
-    @Override
-    public Object decodeString(Connection con, ColumnInfo field, String value) {
-        return convertParsed(format.parse(value));
     }
 }
