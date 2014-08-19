@@ -17,7 +17,7 @@ import java.time.temporal.TemporalAccessor;
 public class Types {
     // how do you define variable length fields in text
     // "yyyy-MM-dd HH:mm:ss.SSS"
-    public static final AbstractDateTime TIMESTAMP = new Timestamp(1114,
+    public static final Timestamp TIMESTAMP = new Timestamp(1114,
             new DateTimeFormatterBuilder()
                     .appendValue(ChronoField.YEAR, 4)
                     .appendLiteral("-")
@@ -39,7 +39,7 @@ public class Types {
             return LocalDateTime.from(temporal).atZone(ZoneId.of(con.getParameterValue("TimeZone"))).toOffsetDateTime();
         }
     };
-    public static final AbstractDateTime TIMESTAMPTZ = new Timestamp(1184,
+    public static final Timestamp TIMESTAMPTZ = new Timestamp(1184,
             new DateTimeFormatterBuilder()
                     .appendValue(ChronoField.YEAR, 4)
                     .appendLiteral("-")
@@ -61,7 +61,7 @@ public class Types {
             return OffsetDateTime.from(temporal);
         }
     };
-    public static final AbstractDateTime DATE = new Date();
+    public static final Date DATE = new Date();
 
     public static final Int2 INT2 = new Int2(21);
     public static final TypedArray INT2_ARRAY = new TypedArray(1005, INT2, TypedArray.makeReader(Short.TYPE));
@@ -84,4 +84,6 @@ public class Types {
 
 
     public static final ByteA BYTEA = new ByteA();
+
+    public static final Bool BOOL = new Bool();
 }

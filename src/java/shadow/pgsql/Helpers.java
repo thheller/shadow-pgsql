@@ -84,9 +84,6 @@ public class Helpers {
 
         @Override
         public Object complete(Object state) {
-            if (state == null) {
-                throw new IllegalStateException("no column?");
-            }
             return state;
         }
     };

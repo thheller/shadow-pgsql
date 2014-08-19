@@ -23,6 +23,7 @@ public class BasicTest {
         this.db = Database.setup("localhost", 5432, "zilence", "shadow_pgsql");
         this.pg = db.connect();
 
+        pg.executeWith("DELETE FROM types");
         pg.executeWith("DELETE FROM num_types");
         pg.executeWith("DELETE FROM timestamp_types");
         pg.executeWith("DELETE FROM array_types");
@@ -198,6 +199,19 @@ public class BasicTest {
             String[] recv = (String[]) pq.execute(params);
 
             assertArrayEquals(send, recv);
+        }
+    }
+
+    @Test
+    public void testBool() throws IOException {
+        try (PreparedQuery pq = roundtripQuery("types", "t_bool")) {
+            assertTrue((Boolean) pq.executeWith(true));
+            assertFalse((Boolean) pq.executeWith(false));
+
+            // lol varargs ...
+            List params = new ArrayList();
+            params.add(null);
+            assertNull(pq.execute(params));
         }
     }
 }

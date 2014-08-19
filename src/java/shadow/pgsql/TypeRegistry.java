@@ -81,7 +81,8 @@ public class TypeRegistry {
                 Types.TIMESTAMP,
                 Types.TIMESTAMPTZ,
                 Types.DATE,
-                Types.BYTEA
+                Types.BYTEA,
+                Types.BOOL
         };
 
         for (TypeHandler t : defaults) {
