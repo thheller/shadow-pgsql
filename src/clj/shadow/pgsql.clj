@@ -16,7 +16,7 @@
             TypedArray
             ArrayReader
             Text
-            Text$Conversion])
+            Text$Conversion Types])
 
   (:require [clojure.string :as str]))
 
@@ -50,7 +50,7 @@
 (defn with-connection* [{:keys [^DatabasePool pool] :as db} handler]
   (let [db-id (.getPoolId pool)]
     (if-let [con (get *open-connections* db-id)]
-      (handler con) ;; reuse open connection
+      (handler con)                                         ;; reuse open connection
       (let [con (.borrowObject pool)]
         (try
           (let [result (binding [*open-connections* (assoc *open-connections*
@@ -64,21 +64,21 @@
 
 (defmacro with-connection [[con db] & body]
   `(with-connection* ~db
-     (fn [~con]
-       ~@body)))
+                     (fn [~con]
+                       ~@body)))
 
 (defmacro with-transaction [[con db] & body]
   `(with-connection* ~db
-     (fn [~con]
-       (.begin ~con)
-       (try
-         (let [result# (do ~@body)]
-           (.commit ~con)
-           result#) 
-         (catch Throwable t#
-           (.rollback ~con)
-           (throw t#)
-           )))))
+                     (fn [~con]
+                       (.begin ~con)
+                       (try
+                         (let [result# (do ~@body)]
+                           (.commit ~con)
+                           result#)
+                         (catch Throwable t#
+                           (.rollback ~con)
+                           (throw t#)
+                           )))))
 
 (defn- quoted [^String s]
   (when-not (= -1 (.indexOf s "\""))
@@ -129,34 +129,56 @@
   [db columns]
   Helpers/ONE_ROW)
 
-(def keyword-type
-  (Text. 
-   (reify Text$Conversion
-     (encode [_ param]
-       (when-not (keyword? param)
-         (throw (IllegalArgumentException. (format "not a keyword: %s" (pr-str param)))))
-       (.substring (str param) 1))
-     (decode [_ ^String s]
-       (let [idx (.indexOf s "/")]
-         (if (not= -1 idx)
-           (keyword (.substring s 0 idx)
-                    (.substring s idx))
-           (keyword s)))))))
+(def ^{:doc "stores keywords as text without the : so :hello/world is \"hello/world\" "}
+  keyword-type
+  (Text.
+    (reify Text$Conversion
+      (encode [_ param]
+        (when-not (keyword? param)
+          (throw (IllegalArgumentException. (format "not a keyword: %s" (pr-str param)))))
+        (.substring (str param) 1))
+      (decode [_ ^String s]
+        (let [idx (.indexOf s "/")]
+          (if (not= -1 idx)
+            (keyword (.substring s 0 idx)
+                     (.substring s idx))
+            (keyword s)))))))
 
-(deftype ClojureSetReader []
-  ArrayReader
-  (init [_ size]
-    (transient #{}))
-  (add [_ state index object]
-    (conj! state object))
-  (addNull [_ state index]
-    ;; FIXME: probably to harsh to throw
-    (throw (ex-info "NULL not supported in sets")))
-  (complete [_ state]
-    (persistent! state)))
+(def ^:private clojure-set-reader
+  (reify
+    ArrayReader
+    (init [_ size]
+      (transient #{}))
+    (add [_ state index object]
+      (conj! state object))
+    (addNull [_ state index]
+      ;; FIXME: probably to harsh to throw
+      (throw (ex-info "NULL not supported in sets")))
+    (complete [_ state]
+      (persistent! state))))
 
-(defn set-type [item-type]
-  (TypedArray. item-type (ClojureSetReader.)))
+(defn set-type
+  [item-type]
+  (TypedArray. item-type clojure-set-reader))
+
+(def ^:private clojure-vec-reader
+  (reify
+    ArrayReader
+    (init [_ size]
+      (transient []))
+    (add [_ state index object]
+      (conj! state object))
+    (addNull [_ state index]
+      ;; FIXME: probably to harsh to throw
+      (throw (ex-info "NULL not supported in vectors")))
+    (complete [_ state]
+      (persistent! state))))
+
+(defn vec-type
+  [item-type]
+  (TypedArray. item-type clojure-vec-reader))
+
+(def text-type Types/TEXT)
 
 (deftype ClojureStatement [db sql params types]
   Statement
@@ -184,7 +206,7 @@
     (if (fn? result-builder)
       (result-builder db columns)
       result-builder))
-  
+
   (createRowBuilder [this columns]
     (if (fn? row-builder)
       (row-builder db columns)
@@ -192,50 +214,50 @@
 
 (defn as-query [db args]
   (cond
-   (string? args)
-   (ClojureQuery. db args [] (:types db) result->vec row->map)
+    (string? args)
+    (ClojureQuery. db args [] (:types db) result->vec row->map)
 
-   (map? args)
-   (let [{:keys [sql params types result row]} args]
-     (ClojureQuery. db
-                    sql 
-                    (or params [])
-                    (or types
-                        (:types db)
-                        TypeRegistry/DEFAULT)
-                    (or result result->vec)
-                    (or row row->map)))
+    (map? args)
+    (let [{:keys [sql params types result row]} args]
+      (ClojureQuery. db
+                     sql
+                     (or params [])
+                     (or types
+                         (:types db)
+                         TypeRegistry/DEFAULT)
+                     (or result result->vec)
+                     (or row row->map)))
 
-   (instance? Query args)
-   args
-   
-   :else
-   (throw (ex-info "cannot build query from args" {:args args}))))
+    (instance? Query args)
+    args
+
+    :else
+    (throw (ex-info "cannot build query from args" {:args args}))))
 
 (defn as-statement [db args]
   (cond
-   (string? args)
-   (ClojureStatement. db args [] (:types db))
-   
-   (map? args)
-   (let [{:keys [sql params types]} args]
-     (ClojureStatement. db
-                        sql
-                        (or params [])
-                        (or types
-                            (:types db)
-                            TypeRegistry/DEFAULT)))
-   
-   (instance? Statement args)
-   args
-   ))
+    (string? args)
+    (ClojureStatement. db args [] (:types db))
+
+    (map? args)
+    (let [{:keys [sql params types]} args]
+      (ClojureStatement. db
+                         sql
+                         (or params [])
+                         (or types
+                             (:types db)
+                             TypeRegistry/DEFAULT)))
+
+    (instance? Statement args)
+    args
+    ))
 
 (defn query
   [db query & params]
   (let [query (as-query db query)
         params (into [] params)]
     (with-connection [^Connection con db]
-      (.executeQuery con query params))))
+                     (.executeQuery con query params))))
 
 (defn insert
   [db
@@ -247,14 +269,14 @@
   (when-not (and (vector? columns)
                  (seq columns))
     (throw (ex-info "need a vector of columns" args)))
-  
+
   (let [{:keys [table-naming column-naming types]} db
         table-name (->> (:table args)
                         (to-sql-name table-naming))
 
         column-names (->> columns
-                         (map #(to-sql-name column-naming %)))
-        
+                          (map #(to-sql-name column-naming %)))
+
         param-types (->> column-names
                          (map #(.getTypeHandlerForColumn types table-name %))
                          (into []))
@@ -262,7 +284,7 @@
         returning-names (->> returning
                              (map #(to-sql-name column-naming %))
                              (map quoted))
-        
+
         sql (str "INSERT INTO "
                  table-name
                  " ("
@@ -273,30 +295,30 @@
                  (->> column-names
                       (count)
                       (range)
-                      (map inc) ;; 1-idx
+                      (map inc)                             ;; 1-idx
                       (map #(str "$" %))
                       (str/join ","))
                  ") RETURNING "
-                 (str/join ", " returning-names)) ;; already quoted if needed
+                 (str/join ", " returning-names))           ;; already quoted if needed
 
         query (ClojureQuery. db sql param-types types result-builder row-builder)]
     (with-transaction [^Connection con db]
-      (with-open [prep (.prepareQuery con query)]
-        (->> data
-             (reduce (fn [result row]
-                       (let [params (columns-fn row columns)
-                             row-result (.execute prep params)]
-                         (conj! result (merge-fn row row-result))))
-                     (transient []))
-             (persistent!))
-        ))))
+                      (with-open [prep (.prepareQuery con query)]
+                        (->> data
+                             (reduce (fn [result row]
+                                       (let [params (columns-fn row columns)
+                                             row-result (.execute prep params)]
+                                         (conj! result (merge-fn row row-result))))
+                                     (transient []))
+                             (persistent!))
+                        ))))
 
 (defn execute [db stmt & params]
   (let [stmt (as-statement db stmt)
         params (into [] params)]
     (with-connection [^Connection con db]
-      (-> (.execute con stmt params)
-          (.getRowsAffected)))))
+                     (-> (.execute con stmt params)
+                         (.getRowsAffected)))))
 
 (defn start
   [{:keys [host
@@ -322,17 +344,17 @@
 
 (defn build-types
   ([type-map table-naming column-naming]
-     (build-types TypeRegistry/DEFAULT type-map table-naming column-naming))
+   (build-types TypeRegistry/DEFAULT type-map table-naming column-naming))
   ([^TypeRegistry type-registry type-map table-naming column-naming]
-     (let [new-registry (.copy type-registry)]
+   (let [new-registry (.copy type-registry)]
 
-       (doseq [[table-name columns] type-map
-               :let [table-name (to-sql-name table-naming table-name)]
-               [column-name handler] columns
-               :let [column-name (to-sql-name column-naming column-name)]]
-         (.registerColumnHandler new-registry table-name column-name handler))
+     (doseq [[table-name columns] type-map
+             :let [table-name (to-sql-name table-naming table-name)]
+             [column-name handler] columns
+             :let [column-name (to-sql-name column-naming column-name)]]
+       (.registerColumnHandler new-registry table-name column-name handler))
 
-       (.build new-registry))))
+     (.build new-registry))))
 
 (defn with-types
   "copy db instance with custom type handlers {table-name {column-name type-handler}}
@@ -340,6 +362,15 @@
   [{:keys [table-naming column-naming] :as db} type-map]
   (let [^TypeRegistry type-registry (:types db)]
     (assoc db :types (build-types type-registry type-map table-naming column-naming))))
+
+(defn with-default-types [db & handlers]
+  (let [^TypeRegistry type-registry (:types db)
+        new-registry (.copy type-registry)]
+
+    (doseq [handler handlers]
+      (.registerTypeHandler new-registry handler))
+
+    (assoc db :types (.build new-registry))))
 
 (defn stop [db]
   (.close ^java.lang.AutoCloseable db))

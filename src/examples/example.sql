@@ -18,3 +18,10 @@ CREATE TABLE users (
   created_at timestamp not null,
   primary key(id)
 );
+
+CREATE TABLE projects (
+    id serial not null,
+    name text not null,
+    tags text[] not null,
+    PRIMARY KEY(id)
+);
