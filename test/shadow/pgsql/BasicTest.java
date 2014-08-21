@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 
 import static org.junit.Assert.*;
 
@@ -184,6 +185,12 @@ public class BasicTest {
             byte[] recv = (byte[]) pq.executeWith(send);
 
             assertArrayEquals(send, recv);
+
+            send = new byte[1000000];
+            new Random().nextBytes(send);
+            recv = (byte[]) pq.executeWith(send);
+
+            assertArrayEquals(send, recv);
         }
     }
 
@@ -235,5 +242,27 @@ public class BasicTest {
         try (PreparedQuery pq = roundtripQuery("types", "t_float8")) {
             assertEquals(3.14d, pq.executeWith(3.14d));
         }
+    }
+
+    public static class GetById implements DatabaseTask<Object> {
+        private final int id;
+
+        public GetById(int id) {
+            this.id = id;
+        }
+
+        @Override
+        public Object withConnection(Connection con) throws Exception {
+            return con.executeQueryWith("SELECT * FROM types WHERE id = $1", id);
+        }
+    }
+
+    @Test
+    public void testPool() throws Exception {
+        DatabasePool pool = new DatabasePool(db);
+        final int id = 1;
+        Object r1 = pool.withConnection(con -> con.executeQueryWith("SELECT * FROM types WHERE id = $1", id));
+        Object r2 = pool.withConnection(new GetById(id));
+        // FIXME: you call this a test?
     }
 }

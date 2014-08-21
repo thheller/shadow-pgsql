@@ -12,6 +12,7 @@ import java.util.Map;
  */
 public class ProtocolInput {
     // FIXME: find a good default buffer size, this may be too much but shouldn't hurt.
+    // FIXME: make configurable
     private static final int BUFFER_SIZE = 65536;
 
     private final Connection pg;

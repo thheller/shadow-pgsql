@@ -31,8 +31,16 @@ public class DatabasePool extends GenericObjectPool<Connection> {
 
             @Override
             public boolean validateObject(PooledObject<Connection> po) {
-                // doesn't do any real validation, just checks if no writes are pending
-                po.getObject().checkReady();
+                Connection con = po.getObject();
+
+                // FIXME: any way to set an error message?
+                if (con.openStatements > 0) {
+                    return false;
+                } else if (con.txState != TransactionStatus.IDLE) {
+                    return false;
+                }
+
+                con.checkReady();
                 return true;
             }
 
@@ -65,6 +73,19 @@ public class DatabasePool extends GenericObjectPool<Connection> {
 
     public Database getDatabase() {
         return database;
+    }
+
+    public <RESULT> RESULT withConnection(DatabaseTask<RESULT> task) throws Exception {
+       Connection con = this.borrowObject();
+       try {
+           RESULT result = task.withConnection(con);
+           this.returnObject(con);
+           return result;
+       } catch (Exception e) {
+           // FIXME: really? probably safe to re-use
+           this.invalidateObject(con);
+           throw e;
+       }
     }
 
 

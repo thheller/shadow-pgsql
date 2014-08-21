@@ -38,8 +38,6 @@ public class PreparedQuery extends PreparedBase {
 
         boolean complete = false;
 
-        final byte[] fieldBuffer = new byte[16384];
-
         // flow <- 2/D*/n?/C/Z
         RESULT_LOOP:
         while (true) {

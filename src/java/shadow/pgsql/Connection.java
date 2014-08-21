@@ -18,6 +18,8 @@ public class Connection implements AutoCloseable {
     private int queryId = 0;
     private int savepointId = 0;
 
+    int openStatements = 0;
+
     private final Database db;
     private final SocketChannel socket;
 
@@ -139,7 +141,6 @@ public class Connection implements AutoCloseable {
     public boolean isInTransaction() {
         return this.txState == TransactionStatus.TRANSACTION;
     }
-
 
     // FIXME: make public? should only be used for simple commands
     // simple only supports string encoding for types
@@ -270,6 +271,8 @@ public class Connection implements AutoCloseable {
             }
         }
 
+        openStatements += 1;
+
         if (errorData != null) {
             if (parsed) {
                 throw new IllegalStateException("Error but Parsed!");
@@ -295,7 +298,7 @@ public class Connection implements AutoCloseable {
             return new PreparedStatement(this, statementId, encoders, statement);
         } catch (Exception e) {
             // FIXME: this might also throw!
-            closeQuery(statementId);
+            closeStatement(statementId);
             throw e;
         }
     }
@@ -401,7 +404,7 @@ public class Connection implements AutoCloseable {
             return new PreparedQuery(this, statementId, encoders, query, columnInfos, decoders, resultBuilder, rowBuilder);
         } catch (Exception e) {
             try {
-                closeQuery(statementId);
+                closeStatement(statementId);
             } catch (Exception e2) {
                 // FIXME: what is correct here?
             }
@@ -455,7 +458,7 @@ public class Connection implements AutoCloseable {
         socket.close();
     }
 
-    public void closeQuery(String statementId) throws IOException {
+    public void closeStatement(String statementId) throws IOException {
         output.checkReset();
 
         // Close
@@ -498,6 +501,8 @@ public class Connection implements AutoCloseable {
                 }
             }
         }
+
+        openStatements -= 1;
 
         if (errorData != null) {
             throw new CommandException("Failed to close Statement", errorData);

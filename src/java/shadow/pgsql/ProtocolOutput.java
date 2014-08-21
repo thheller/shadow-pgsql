@@ -38,7 +38,7 @@ public class ProtocolOutput {
 
     private void maybeGrow(int bytesComing) {
         if (this.out.remaining() < bytesComing) {
-            ByteBuffer larger = ByteBuffer.allocate(this.out.capacity() + BLOCK_SIZE);
+            ByteBuffer larger = ByteBuffer.allocateDirect(this.out.capacity() + Math.max(BLOCK_SIZE, bytesComing));
 
             out.flip();
             larger.put(out);

@@ -126,6 +126,6 @@ public abstract class PreparedBase implements AutoCloseable {
     }
 
     public void close() throws IOException {
-        pg.closeQuery(statementId);
+        pg.closeStatement(statementId);
     }
 }
