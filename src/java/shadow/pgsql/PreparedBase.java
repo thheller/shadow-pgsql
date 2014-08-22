@@ -102,7 +102,7 @@ public abstract class PreparedBase implements AutoCloseable {
 
     protected void executeWithParams(TypeHandler[] typeDecoders, List queryParams) throws IOException {
         if (queryParams.size() != typeEncoders.length) {
-            throw new IllegalArgumentException(String.format("Not enough Params provided to Statement, expected %d got %d", typeEncoders.length, queryParams.size()));
+            throw new IllegalArgumentException(String.format("Incorrect params provided to Statement, expected %d got %d", typeEncoders.length, queryParams.size()));
         }
 
         pg.checkReady();

@@ -38,61 +38,66 @@
   (from-sql-name [_ sv]
     (keyword (with-dashes sv))))
 
-(def ^{:private true
-       :dynamic true}
-  *open-connections* {})
+(defprotocol WithConnection
+  (-with-connection [_ task-fn]))
 
 (defrecord DB [pool table-naming column-naming types opts]
   java.lang.AutoCloseable
   (close [_]
-    (.close ^DatabasePool pool)))
+    (.close ^DatabasePool pool))
 
-(defn with-connection* [{:keys [^DatabasePool pool] :as db} handler]
-  (let [db-id (.getPoolId pool)]
-    (if-let [con (get *open-connections* db-id)]
-      (handler con)                                         ;; reuse open connection
-      (let [con (.borrowObject pool)]
-        (try
-          (let [result (binding [*open-connections* (assoc *open-connections*
-                                                      db-id con)]
-                         (handler con))]
-            (.returnObject pool con)
-            result)
-          (catch Throwable t
-            (.invalidateObject pool con)
-            (throw t)))))))
+  WithConnection
+  (-with-connection [_ task-fn]
+    (let [con (.borrowObject pool)]
+      (try
+        (let [result (task-fn con)]
+          (.returnObject pool con)
+          result)
+        (catch Throwable t
+          (.invalidateObject pool con)
+          (throw t))))))
+
+(defrecord ConnectedDB [connection pool table-naming column-naming types opts]
+  java.lang.AutoCloseable
+  (close [_]
+    (.returnObject ^DatabasePool pool ^Connection connection))
+  WithConnection
+  (-with-connection [_ task-fn]
+    ;; FIXME: invalidate con?
+    (task-fn connection)))
+
+(defn db->connected-db [{:keys [pool table-naming column-naming types opts] :as db}]
+  (when (instance? ConnectedDB db)
+    (throw (ex-info "already connected" {:db db})))
+
+  (ConnectedDB. (.borrowObject pool)
+                pool
+                table-naming
+                column-naming
+                types
+                opts))
 
 (defmacro with-connection [[con db] & body]
-  `(with-connection* ~db
-                     (fn [~con]
-                       ~@body)))
+  `(with-open [~con (db->connected-db ~db)]
+     ~@body))
 
 (defmacro with-transaction [[con db] & body]
-  `(with-connection* ~db
-                     (fn [~con]
-                       (.begin ~con)
-                       (try
-                         (let [result# (do ~@body)]
-                           (.commit ~con)
-                           result#)
-                         (catch Throwable t#
-                           (.rollback ~con)
-                           (throw t#)
-                           )))))
+  `(with-open [~con (db->connected-db ~db)]
+     (let [con# (:connection ~con)]
+       (.begin con#)
+       (try
+         (let [result# (do ~@body)]
+           (.commit con#)
+           result#)
+         (catch Throwable t#
+           (.rollback con#)
+           (throw t#)
+           )))))
 
 (defn- quoted [^String s]
   (when-not (= -1 (.indexOf s "\""))
     (throw (ex-info "names cannot contain quotes" {:s s})))
   (str \" s \"))
-
-(deftype ClojureResultBuilder [init-fn reduce-fn complete-fn]
-  ResultBuilder
-  (init [_]
-    (init-fn))
-  (add [_ state row]
-    (reduce-fn state row))
-  (complete [_ state]
-    (complete-fn state)))
 
 (deftype ClojureMapBuilder [column-names]
   RowBuilder
@@ -108,8 +113,31 @@
   (complete [_ state]
     (persistent! state)))
 
-(defn result->vec [db columns]
-  (ClojureResultBuilder. #(transient []) conj! persistent!))
+(def result->vec
+  (reify
+    ResultBuilder
+    (init [_]
+      (transient []))
+    (add [_ state row]
+      (conj! state row))
+    (complete [_ state]
+      (persistent! state))))
+
+(defn result->map
+  "{:result (sql/result->map :id)}
+
+   SELECT * FROM something
+
+   will return {id1 row1, id2 row2, ...}"
+  [key-fn]
+  (reify
+    ResultBuilder
+    (init [_]
+      (transient {}))
+    (add [_ state row]
+      (assoc! state (key-fn row) row))
+    (complete [_ state]
+      (persistent! state))))
 
 (defn row->map
   [{:keys [column-naming] :as db} columns]
@@ -256,8 +284,9 @@
   [db query & params]
   (let [query (as-query db query)
         params (into [] params)]
-    (with-connection [^Connection con db]
-                     (.executeQuery con query params))))
+
+    (-with-connection db (fn [^Connection con]
+                           (.executeQuery con query params)))))
 
 (defn insert
   [db
@@ -271,8 +300,7 @@
     (throw (ex-info "need a vector of columns" args)))
 
   (let [{:keys [table-naming column-naming types]} db
-        table-name (->> (:table args)
-                        (to-sql-name table-naming))
+        table-name (to-sql-name table-naming table)
 
         column-names (->> columns
                           (map #(to-sql-name column-naming %)))
@@ -295,30 +323,67 @@
                  (->> column-names
                       (count)
                       (range)
-                      (map inc)                             ;; 1-idx
+                      (map inc) ;; 1-idx
                       (map #(str "$" %))
                       (str/join ","))
                  ") RETURNING "
-                 (str/join ", " returning-names))           ;; already quoted if needed
+                 (str/join ", " returning-names)) ;; already quoted if needed
 
         query (ClojureQuery. db sql param-types types result-builder row-builder)]
-    (with-transaction [^Connection con db]
-                      (with-open [prep (.prepareQuery con query)]
-                        (->> data
-                             (reduce (fn [result row]
-                                       (let [params (columns-fn row columns)
-                                             row-result (.execute prep params)]
-                                         (conj! result (merge-fn row row-result))))
-                                     (transient []))
-                             (persistent!))
-                        ))))
+    (with-transaction [con-db db]
+      (-with-connection con-db
+                        (fn [^Connection con]
+                          (with-open [prep (.prepareQuery con query)]
+                            (->> data
+                                 (reduce (fn [result row]
+                                           (let [params (columns-fn row columns)
+                                                 row-result (.execute prep params)]
+                                             (conj! result (merge-fn row row-result))))
+                                         (transient []))
+                                 (persistent!))
+                            ))))))
+
+(defn prepare [{:keys [connection] :as db} stmt]
+  (when-not (instance? ConnectedDB db)
+    (throw (ex-info "not a connected db, please use with-connection" {:db db})))
+
+  (let [stmt (as-statement db stmt)
+        prep (.prepare connection stmt)]
+
+    (reify
+      java.lang.AutoCloseable
+      (close [_]
+        (.close prep))
+
+      clojure.lang.IFn
+      (invoke [_ p1]
+        (.execute prep [p1]))
+      (invoke [_ p1 p2]
+        (.execute prep [p1 p2]))
+      (invoke [_ p1 p2 p3]
+        (.execute prep [p1 p2 p3]))
+      (invoke [_ p1 p2 p3 p4]
+        (.execute prep [p1 p2 p3 p4]))
+      (invoke [_ p1 p2 p3 p4 p5]
+        (.execute prep [p1 p2 p3 p4 p5]))
+      (invoke [_ p1 p2 p3 p4 p5 p6]
+        (.execute prep [p1 p2 p3 p4 p5 p6]))
+      (invoke [_ p1 p2 p3 p4 p5 p6 p7]
+        (.execute prep [p1 p2 p3 p4 p5 p6 p7]))
+      (invoke [_ p1 p2 p3 p4 p5 p6 p7 p8]
+        (.execute prep [p1 p2 p3 p4 p5 p6 p7 p8]))
+      (invoke [_ p1 p2 p3 p4 p5 p6 p7 p8 p9]
+        (.execute prep [p1 p2 p3 p4 p5 p6 p7 p8 p9]))
+      (invoke [_ p1 p2 p3 p4 p5 p6 p7 p8 p9 p10]
+        (.execute prep [p1 p2 p3 p4 p5 p6 p7 p8 p9 p10]))
+      )))
 
 (defn execute [db stmt & params]
   (let [stmt (as-statement db stmt)
         params (into [] params)]
-    (with-connection [^Connection con db]
-                     (-> (.execute con stmt params)
-                         (.getRowsAffected)))))
+    (-with-connection db (fn [^Connection con]
+                           (-> (.execute con stmt params)
+                               (.getRowsAffected))))))
 
 (defn start
   [{:keys [host

@@ -17,4 +17,9 @@ public class StatementResult {
     public int getRowsAffected() {
         return Integer.parseInt(tag.substring(tag.lastIndexOf(" ") + 1));
     }
+
+    @Override
+    public String toString() {
+        return tag;
+    }
 }

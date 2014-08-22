@@ -23,8 +23,11 @@
    :result sql/result->vec
    :row sql/row->map})
 
+(defn test-db []
+  (sql/start {:user "zilence" :database "shadow_pgsql"}))
+
 (deftest test-basics
-  (with-open [db (sql/start {:user "zilence" :database "shadow_pgsql"})]
+  (with-open [db (test-db)]
     (pprint
       (sql/execute db "DELETE FROM num_types"))
 
@@ -59,3 +62,12 @@
                        ))
 
     ))
+
+(deftest test-prepare
+  (with-open [db (test-db)]
+    (sql/with-connection [con db]
+      (with-open [insert (sql/prepare con "INSERT INTO types (t_bool, t_int4, t_text) VALUES ($1, $2, $3)") ]
+        (pprint (insert true 1 "hello"))
+        (pprint (insert false 2 "world"))))
+    ))
+

@@ -76,16 +76,16 @@ public class DatabasePool extends GenericObjectPool<Connection> {
     }
 
     public <RESULT> RESULT withConnection(DatabaseTask<RESULT> task) throws Exception {
-       Connection con = this.borrowObject();
-       try {
-           RESULT result = task.withConnection(con);
-           this.returnObject(con);
-           return result;
-       } catch (Exception e) {
-           // FIXME: really? probably safe to re-use
-           this.invalidateObject(con);
-           throw e;
-       }
+        Connection con = this.borrowObject();
+        try {
+            RESULT result = task.withConnection(con);
+            this.returnObject(con);
+            return result;
+        } catch (Exception e) {
+            // FIXME: really? probably safe to re-use
+            this.invalidateObject(con);
+            throw e;
+        }
     }
 
 

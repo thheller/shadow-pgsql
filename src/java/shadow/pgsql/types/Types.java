@@ -1,7 +1,6 @@
 package shadow.pgsql.types;
 
 import shadow.pgsql.Connection;
-import shadow.pgsql.TypeHandler;
 
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;

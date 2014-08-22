@@ -17,8 +17,8 @@ public interface AuthHandler {
      *
      * @param con
      * @param type
-     * @param buf extra bytes send by the backend, each type contains it own set of bytes
-     *            handle accordingly
+     * @param buf  extra bytes send by the backend, each type contains it own set of bytes
+     *             handle accordingly
      * @link http://www.postgresql.org/docs/9.2/static/protocol-message-formats.html
      */
     public void doAuth(Connection con, int type, ByteBuffer buf) throws IOException;
