@@ -21,7 +21,7 @@ public class Connection implements AutoCloseable {
     int openStatements = 0;
 
     private final Database db;
-    private final SocketChannel socket;
+    private final IO io;
 
     public ProtocolOutput output;
     public ProtocolInput input;
@@ -31,12 +31,12 @@ public class Connection implements AutoCloseable {
     ConnectionState state;
     TransactionStatus txState;
 
-    Connection(Database db, SocketChannel socket) throws IOException {
+    Connection(Database db, IO io) throws IOException {
         this.db = db;
-        this.socket = socket;
+        this.io = io;
 
-        this.input = new ProtocolInput(this, socket);
-        this.output = new ProtocolOutput(this, socket);
+        this.input = new ProtocolInput(this, io);
+        this.output = new ProtocolOutput(io);
 
         this.state = ConnectionState.CONNECTED;
     }
@@ -454,7 +454,7 @@ public class Connection implements AutoCloseable {
 
         this.state = ConnectionState.CLOSED;
 
-        socket.close();
+        io.close();
     }
 
     public void closeStatement(String statementId) throws IOException {

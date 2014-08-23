@@ -4,7 +4,10 @@ import shadow.pgsql.utils.RowProcessor;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.SocketOptions;
+import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
+import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -75,36 +78,41 @@ public class Database {
     public Connection connect() throws IOException {
         Connection pg = null;
 
+        IO io = null;
+
         SocketChannel channel = SocketChannel.open(new InetSocketAddress(host, port));
+        channel.configureBlocking(true);
 
         if (ssl) {
-            /*
-            Socket socket = new Socket(host, port);
-            DataOutputStream out = new DataOutputStream(new BufferedOutputStream(socket.getOutputStream(), 8));
-            out.writeInt(8); // 4+4 (message size)
-            out.writeInt(80877103); // ssl code
-            out.flush();
 
-            final int res = socket.getInputStream().read(); // one byte response S/N
+            ByteBuffer buf = ByteBuffer.allocate(8);
 
-            if (res != 'S') {
-                socket.close();
+            buf.putInt(8);
+            buf.putInt(80877103);
+            buf.flip();
+            channel.write(buf);
+            buf.clear();
+
+            buf.limit(1);
+
+            channel.read(buf);
+            buf.flip();
+
+            if (buf.get() != 'S') {
                 throw new IllegalStateException("ssl not accepted");
             }
 
-            // FIXME: might need support for custom trust, keystores, or more options in general (client certs?)
-            SSLSocketFactory sslFactory = (SSLSocketFactory) SSLSocketFactory.getDefault();
-            SSLSocket ssl = (SSLSocket) sslFactory.createSocket(socket, host, port, true);
+            try {
+                io = SSLSocketIO.start(channel, host, port);
+            } catch (NoSuchAlgorithmException e) {
+                throw new IllegalStateException("ssl algorithm missing", e);
+            }
 
-            ssl.startHandshake();
-
-            pg = new Connection(this, ssl);
-            */
-            throw new UnsupportedOperationException("NIO ssl, need to check that out first");
         } else {
-            pg = new Connection(this, channel);
+            io = new SocketIO(channel);
         }
 
+        pg = new Connection(this, io);
         pg.startup(connectParams, authHandler);
         return pg;
     }

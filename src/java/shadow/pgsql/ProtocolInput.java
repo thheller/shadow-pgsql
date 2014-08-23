@@ -16,7 +16,7 @@ public class ProtocolInput {
     private static final int BUFFER_SIZE = 65536;
 
     private final Connection pg;
-    public final SocketChannel channel;
+    private final IO io;
 
     private final ByteBuffer frame = ByteBuffer.allocateDirect(5); // 1 byte command, 4 byte size
     private final ByteBuffer defaultBuffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
@@ -24,9 +24,9 @@ public class ProtocolInput {
     public ByteBuffer current = defaultBuffer;
     public int currentSize = 0;
 
-    public ProtocolInput(Connection pg, SocketChannel channel) {
+    public ProtocolInput(Connection pg, IO io) {
         this.pg = pg;
-        this.channel = channel;
+        this.io = io;
     }
 
     String readString() throws IOException {
@@ -55,23 +55,6 @@ public class ProtocolInput {
         }
     }
 
-    private void fillBuffer(ByteBuffer target, int size) throws IOException {
-        int read = 0;
-        do {
-            int x = channel.read(target);
-            if (x == -1) {
-                throw new EOFException();
-            }
-            read += x;
-        } while (read < size);
-
-        if (read != size) {
-            throw new IllegalStateException("partial buffer");
-        }
-
-        target.flip();
-    }
-
     /**
      * reads next command byte
      * <p/>
@@ -89,7 +72,7 @@ public class ProtocolInput {
         while (true) {
             frame.clear();
 
-            fillBuffer(frame, 5);
+            io.recv(frame);
 
             final char type = (char) frame.get();
             final int size = currentSize = frame.getInt() - 4; // size includes itself
@@ -110,7 +93,9 @@ public class ProtocolInput {
                     current.limit(size);
                 }
 
-                fillBuffer(current, size);
+                io.recv(current);
+
+                // FIXME: current.asReadyOnlyBuffer() ?
 
                 switch (type) {
                     case 'N': // NoticeResponse

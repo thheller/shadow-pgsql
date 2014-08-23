@@ -265,4 +265,5 @@ public class BasicTest {
         Object r2 = pool.withConnection(new GetById(id));
         // FIXME: you call this a test?
     }
+
 }

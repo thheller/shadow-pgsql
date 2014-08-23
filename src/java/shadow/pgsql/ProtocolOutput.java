@@ -28,12 +28,10 @@ public class ProtocolOutput {
 
     private final Stack<Mark> marks = new Stack<>();
 
-    private final Connection connection;
-    private final SocketChannel channel;
+    private final IO io;
 
-    public ProtocolOutput(Connection con, SocketChannel channel) {
-        this.connection = con;
-        this.channel = channel;
+    public ProtocolOutput(IO io) {
+        this.io = io;
     }
 
     private void maybeGrow(int bytesComing) {
@@ -105,11 +103,7 @@ public class ProtocolOutput {
         }
 
         out.flip();
-        int written = channel.write(out);
-        if (written != out.limit()) {
-            // FIXME: loop
-            throw new IllegalStateException("partial write");
-        }
+        io.send(out);
         reset();
     }
 
