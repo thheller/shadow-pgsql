@@ -65,7 +65,29 @@
 (deftest test-prepare
   (with-open [db (test-db)]
     (sql/with-connection db
-      (with-open [insert (sql/prepare db "INSERT INTO types (t_bool, t_int4, t_text) VALUES ($1, $2, $3)") ]
+      (with-open [insert (sql/prepare db "INSERT INTO types (t_bool, t_int4, t_text) VALUES ($1, $2, $3)")]
         (pprint (insert true 1 "hello"))
         (pprint (insert false 2 "world"))))
     ))
+
+
+(def ?update-add-one
+  {:sql "UPDATE types SET t_int2 = t_int2 + 1 WHERE id = $1 RETURNING t_int2"
+   :result sql/result->one-row
+   :row sql/row->one-column})
+
+(def ?insert-t-int2
+  {:table :types
+   :columns [:t-int2]
+   :returning [:id]
+   :merge-fn (fn [row id] id)})
+
+(deftest test-update
+  (with-open [db (test-db)]
+
+    (let [id (sql/insert-one db ?insert-t-int2 {:t-int2 1})]
+
+      (sql/update db :types {:t-int2 3} "id = $1" id)
+
+      (let [val (sql/query db ?update-add-one id)]
+        (is (= 4 val))))))

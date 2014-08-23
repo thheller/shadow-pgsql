@@ -90,10 +90,11 @@ public class SSLSocketIO implements IO {
                     break;
                 }
                 case NEED_TASK: {
-                    System.out.println("RUNNING TASK");
                     ssl.getDelegatedTask().run();
                     break;
                 }
+                default:
+                    throw new IllegalStateException(String.format("handshake: %s", hs));
 
             }
         }

@@ -17,30 +17,20 @@ public class SocketIO implements IO {
 
     @Override
     public void send(ByteBuffer buf) throws IOException {
-        int written = channel.write(buf);
-        if (written != buf.limit()) {
-            // FIXME: loop
-            throw new IllegalStateException("partial write");
+        while (buf.hasRemaining()) {
+            if (channel.write(buf) < 0) {
+                throw new EOFException();
+            }
         }
     }
 
     @Override
     public void recv(ByteBuffer buf) throws IOException {
-        int size = buf.limit();
-
-        int read = 0;
-        do {
-            int x = channel.read(buf);
-            if (x == -1) {
+        while (buf.hasRemaining()) {
+            if (channel.read(buf) < 0) {
                 throw new EOFException();
             }
-            read += x;
-        } while (read < size);
-
-        if (read != size) {
-            throw new IllegalStateException("partial buffer");
         }
-
         buf.flip();
     }
 

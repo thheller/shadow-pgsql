@@ -18,7 +18,9 @@
             Text
             Text$Conversion Types])
 
-  (:require [clojure.string :as str]))
+  (:require [clojure.string :as str]
+            [clojure.edn :as edn]
+            [shadow.pgsql :as sql]))
 
 (set! *warn-on-reflection* true)
 
@@ -167,6 +169,18 @@
             (keyword (.substring s 0 idx)
                      (.substring s idx))
             (keyword s)))))))
+
+(defn edn-type
+  ([]
+   (edn-type {}))
+  ([edn-opts]
+   (Text.
+     (reify Text$Conversion
+       (encode [_ param]
+         (pr-str param))
+       (decode [_ ^String s]
+         (edn/read-string edn-opts s))
+       ))))
 
 (def ^:private clojure-set-reader
   (reify
@@ -326,7 +340,11 @@
    {:keys [table columns columns-fn returning merge-fn]
     row-builder :row
     result-builder :result
-    :as args}
+    :as args
+    :or {columns-fn (fn [row columns]
+                      (mapv #(get row %) columns))
+         merge-fn (fn [row id]
+                    (assoc row :id id))}}
    data]
   (when-not (and (vector? columns)
                  (seq columns))
@@ -334,6 +352,9 @@
 
   (let [{:keys [table-naming column-naming ^TypeRegistry types]} db
         table-name (to-sql-name table-naming table)
+
+        result-builder (or result-builder sql/result->one-row)
+        row-builder (or row-builder sql/row->one-column)
 
         column-names (->> columns
                           (map #(to-sql-name column-naming %)))
@@ -373,6 +394,9 @@
                          (conj! result (merge-fn row row-result))))
                      (transient []))
              (persistent!))))))
+
+(defn insert-one [db stmt data]
+  (first (insert db stmt [data])))
 
 (defn prepare [db stmt]
   (let [connection (get-connection db)
@@ -417,6 +441,23 @@
     (-with-connection db (fn [^Connection con]
                            (-> (.execute con stmt params)
                                (.getRowsAffected))))))
+
+(defn update
+  "(sql/update db :table {:column value, ...} \"id = $1\" id)"
+  [{:keys [table-naming column-naming] :as db} table data where & params]
+  (let [offset (count params)
+        sql (str "UPDATE "
+                 (-> (to-sql-name table-naming table) quoted)
+                 " SET "
+                 (->> (keys data)
+                      (map #(to-sql-name column-naming %))
+                      (map quoted)
+                      (map-indexed (fn [idx col-name]
+                                     (str col-name " = $" (+ idx offset 1))))
+                      (str/join ","))
+                 " WHERE "
+                 where)]
+    (apply execute db sql (concat params (vals data)))))
 
 (defn start
   [{:keys [host
