@@ -42,8 +42,7 @@
 (def keyword-set-type
   (sql/set-type sql/keyword-type))
 
-
-(deftest ^:wip test-arrays
+(deftest test-arrays
   (with-open [db (-> (sql/start {:user "zilence" :database "shadow_pgsql"})
                      (sql/with-types {:array-types {:atext keyword-set-type}})
                      )]
@@ -65,9 +64,8 @@
 
 (deftest test-prepare
   (with-open [db (test-db)]
-    (sql/with-connection [con db]
-      (with-open [insert (sql/prepare con "INSERT INTO types (t_bool, t_int4, t_text) VALUES ($1, $2, $3)") ]
+    (sql/with-connection db
+      (with-open [insert (sql/prepare db "INSERT INTO types (t_bool, t_int4, t_text) VALUES ($1, $2, $3)") ]
         (pprint (insert true 1 "hello"))
         (pprint (insert false 2 "world"))))
     ))
-

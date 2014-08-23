@@ -11,7 +11,7 @@
             ResultBuilder
             ColumnInfo
             Helpers
-            SimpleQuery]
+            SimpleQuery PreparedStatement PreparedQuery]
            [shadow.pgsql.types
             TypedArray
             ArrayReader
@@ -20,6 +20,7 @@
 
   (:require [clojure.string :as str]))
 
+(set! *warn-on-reflection* true)
 
 (defprotocol Naming
   (to-sql-name [this value])
@@ -38,61 +39,57 @@
   (from-sql-name [_ sv]
     (keyword (with-dashes sv))))
 
-(defprotocol WithConnection
-  (-with-connection [_ task-fn]))
+(def ^{:private true
+       :dynamic true}
+  *open-connections* {})
 
-(defrecord DB [pool table-naming column-naming types opts]
+(defprotocol ConnectionScope
+  (-with-connection [_ task-fn])
+  (-get-connection [_]))
+
+(defrecord DB [^DatabasePool pool table-naming column-naming types opts]
   java.lang.AutoCloseable
   (close [_]
     (.close ^DatabasePool pool))
 
-  WithConnection
+  ConnectionScope
+  (-get-connection [_]
+    (get *open-connections* (.getPoolId pool)))
   (-with-connection [_ task-fn]
-    (let [con (.borrowObject pool)]
-      (try
-        (let [result (task-fn con)]
-          (.returnObject pool con)
-          result)
-        (catch Throwable t
-          (.invalidateObject pool con)
-          (throw t))))))
+    (let [db-id (.getPoolId pool)]
+      (if-let [con (get *open-connections* db-id)]
+        (task-fn con)
+        (let [con (.borrowObject pool)]
+          (try
+            (let [result (binding [*open-connections* (assoc *open-connections* db-id con)]
+                           (task-fn con))]
+              (.returnObject pool con)
+              result)
+            (catch Throwable t
+              ;; FIXME: check if connection is IDLE/READY and reuse
+              (.invalidateObject pool con)
+              (throw t))))))))
 
-(defrecord ConnectedDB [connection pool table-naming column-naming types opts]
-  java.lang.AutoCloseable
-  (close [_]
-    (.returnObject ^DatabasePool pool ^Connection connection))
-  WithConnection
-  (-with-connection [_ task-fn]
-    ;; FIXME: invalidate con?
-    (task-fn connection)))
+(defmacro with-connection [db & body]
+  `(-with-connection ~db (fn [con#] ~@body)))
 
-(defn db->connected-db [{:keys [pool table-naming column-naming types opts] :as db}]
-  (when (instance? ConnectedDB db)
-    (throw (ex-info "already connected" {:db db})))
+(defmacro with-transaction [db & body]
+  `(-with-connection ~db (fn [^Connection con#]
+                           (.begin con#)
+                           (try
+                             (let [result# (do ~@body)]
+                               (.commit con#)
+                               result#)
+                             (catch Throwable t#
+                               (.rollback con#)
+                               (throw t#)
+                               )))))
 
-  (ConnectedDB. (.borrowObject pool)
-                pool
-                table-naming
-                column-naming
-                types
-                opts))
-
-(defmacro with-connection [[con db] & body]
-  `(with-open [~con (db->connected-db ~db)]
-     ~@body))
-
-(defmacro with-transaction [[con db] & body]
-  `(with-open [~con (db->connected-db ~db)]
-     (let [con# (:connection ~con)]
-       (.begin con#)
-       (try
-         (let [result# (do ~@body)]
-           (.commit con#)
-           result#)
-         (catch Throwable t#
-           (.rollback con#)
-           (throw t#)
-           )))))
+(defn ^Connection get-connection [db]
+  (if-let [con (-get-connection db)]
+    con
+    (throw (IllegalStateException. "no open connection found, use with-connection/with-transaction"))
+    ))
 
 (defn- quoted [^String s]
   (when-not (= -1 (.indexOf s "\""))
@@ -124,9 +121,8 @@
       (persistent! state))))
 
 (defn result->map
-  "{:result (sql/result->map :id)}
-
-   SELECT * FROM something
+  "{:sql \"SELECT * FROM something\"
+    :result (sql/result->map :id)}
 
    will return {id1 row1, id2 row2, ...}"
   [key-fn]
@@ -141,11 +137,11 @@
 
 (defn row->map
   [{:keys [column-naming] :as db} columns]
-  (let [lookup-array (->> columns
+  (let [column-names (->> columns
                           (map #(.-name ^ColumnInfo %))
                           (map #(from-sql-name column-naming %))
-                          (into-array))]
-    (ClojureMapBuilder. lookup-array)))
+                          (into []))]
+    (ClojureMapBuilder. column-names)))
 
 (defn row->one-column
   "row is returned as the value of the first (only) column"
@@ -240,7 +236,7 @@
       (row-builder db columns)
       row-builder)))
 
-(defn as-query [db args]
+(defn ^Query as-query [db args]
   (cond
     (string? args)
     (ClojureQuery. db args [] (:types db) result->vec row->map)
@@ -262,7 +258,7 @@
     :else
     (throw (ex-info "cannot build query from args" {:args args}))))
 
-(defn as-statement [db args]
+(defn ^Statement as-statement [db args]
   (cond
     (string? args)
     (ClojureStatement. db args [] (:types db))
@@ -279,6 +275,43 @@
     (instance? Statement args)
     args
     ))
+
+(defn prepare-query [db stmt]
+  (let [connection (get-connection db)
+        query (as-query db stmt)
+        ^PreparedQuery prep (.prepareQuery connection query)]
+
+    (reify
+      java.lang.AutoCloseable
+      (close [_]
+        (.close prep))
+
+      clojure.lang.IDeref
+      (deref [_]
+        prep)
+
+      clojure.lang.IFn
+      (invoke [_ p1]
+        (.execute prep [p1]))
+      (invoke [_ p1 p2]
+        (.execute prep [p1 p2]))
+      (invoke [_ p1 p2 p3]
+        (.execute prep [p1 p2 p3]))
+      (invoke [_ p1 p2 p3 p4]
+        (.execute prep [p1 p2 p3 p4]))
+      (invoke [_ p1 p2 p3 p4 p5]
+        (.execute prep [p1 p2 p3 p4 p5]))
+      (invoke [_ p1 p2 p3 p4 p5 p6]
+        (.execute prep [p1 p2 p3 p4 p5 p6]))
+      (invoke [_ p1 p2 p3 p4 p5 p6 p7]
+        (.execute prep [p1 p2 p3 p4 p5 p6 p7]))
+      (invoke [_ p1 p2 p3 p4 p5 p6 p7 p8]
+        (.execute prep [p1 p2 p3 p4 p5 p6 p7 p8]))
+      (invoke [_ p1 p2 p3 p4 p5 p6 p7 p8 p9]
+        (.execute prep [p1 p2 p3 p4 p5 p6 p7 p8 p9]))
+      (invoke [_ p1 p2 p3 p4 p5 p6 p7 p8 p9 p10]
+        (.execute prep [p1 p2 p3 p4 p5 p6 p7 p8 p9 p10]))
+      )))
 
 (defn query
   [db query & params]
@@ -299,7 +332,7 @@
                  (seq columns))
     (throw (ex-info "need a vector of columns" args)))
 
-  (let [{:keys [table-naming column-naming types]} db
+  (let [{:keys [table-naming column-naming ^TypeRegistry types]} db
         table-name (to-sql-name table-naming table)
 
         column-names (->> columns
@@ -330,30 +363,30 @@
                  (str/join ", " returning-names)) ;; already quoted if needed
 
         query (ClojureQuery. db sql param-types types result-builder row-builder)]
-    (with-transaction [con-db db]
-      (-with-connection con-db
-                        (fn [^Connection con]
-                          (with-open [prep (.prepareQuery con query)]
-                            (->> data
-                                 (reduce (fn [result row]
-                                           (let [params (columns-fn row columns)
-                                                 row-result (.execute prep params)]
-                                             (conj! result (merge-fn row row-result))))
-                                         (transient []))
-                                 (persistent!))
-                            ))))))
 
-(defn prepare [{:keys [connection] :as db} stmt]
-  (when-not (instance? ConnectedDB db)
-    (throw (ex-info "not a connected db, please use with-connection" {:db db})))
+    (with-transaction db
+      (with-open [prep (.prepareQuery (get-connection db) query)]
+        (->> data
+             (reduce (fn [result row]
+                       (let [params (columns-fn row columns)
+                             row-result (.execute prep params)]
+                         (conj! result (merge-fn row row-result))))
+                     (transient []))
+             (persistent!))))))
 
-  (let [stmt (as-statement db stmt)
-        prep (.prepare connection stmt)]
+(defn prepare [db stmt]
+  (let [connection (get-connection db)
+        stmt (as-statement db stmt)
+        ^PreparedStatement prep (.prepare connection stmt)]
 
     (reify
       java.lang.AutoCloseable
       (close [_]
         (.close prep))
+
+      clojure.lang.IDeref
+      (deref [_]
+        prep)
 
       clojure.lang.IFn
       (invoke [_ p1]
