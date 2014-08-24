@@ -230,6 +230,7 @@ public class Connection implements AutoCloseable {
 
         int[] paramInfo = null;
         boolean parsed = false;
+        boolean rowDescription = false;
 
         // success flow usually is 1/t/n/Z
 
@@ -249,6 +250,12 @@ public class Connection implements AutoCloseable {
                 case 't': // ParameterDescription
                 {
                     paramInfo = input.readParameterDescription();
+                    break;
+                }
+                case 'T': // RowDescription
+                {
+                    input.readRowDescription();
+                    rowDescription = true;
                     break;
                 }
                 case 'n': // NoData
@@ -283,6 +290,10 @@ public class Connection implements AutoCloseable {
             // FIXME: check if we got NoData?
             if (!parsed || paramInfo == null) {
                 throw new IllegalStateException("backend did not send ParseComplete, ParameterDescription");
+            }
+
+            if (rowDescription) {
+                throw new CommandException(String.format("%s returns rows, use a Query", statement.getSQLString()));
             }
 
             final TypeHandler[] encoders = new TypeHandler[paramInfo.length];
@@ -510,5 +521,9 @@ public class Connection implements AutoCloseable {
         if (!closed) {
             throw new IllegalStateException("Close didn't Close!");
         }
+    }
+
+    public boolean isReady() {
+        return state == ConnectionState.READY && txState == TransactionStatus.IDLE;
     }
 }

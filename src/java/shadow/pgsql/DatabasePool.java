@@ -75,16 +75,37 @@ public class DatabasePool extends GenericObjectPool<Connection> {
         return database;
     }
 
+    public void doneWithConnection(Connection con) {
+        if (con.isReady()) {
+            returnObject(con);
+        } else {
+            try {
+                invalidateObject(con);
+            } catch (Exception e) {
+                // FIXME: logger?
+                System.out.format("Exception while invalidating Pool Object: %s\n", e);
+            }
+        }
+    }
+
+    public void checkConnection(Connection con) {
+        if (con.isInTransaction()) {
+            throw new IllegalStateException("Still in transaction, please commit or rollback!");
+        }
+        // FIXME: could be less picky and close them?
+        if (con.openStatements > 0) {
+            throw new IllegalStateException("Open Statement/Query in connection, please .close everything you prepared.");
+        }
+    }
+
     public <RESULT> RESULT withConnection(DatabaseTask<RESULT> task) throws Exception {
         Connection con = this.borrowObject();
         try {
             RESULT result = task.withConnection(con);
-            this.returnObject(con);
+            checkConnection(con);
             return result;
-        } catch (Exception e) {
-            // FIXME: really? probably safe to re-use
-            this.invalidateObject(con);
-            throw e;
+        } finally {
+            doneWithConnection(con);
         }
     }
 

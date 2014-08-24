@@ -11,7 +11,7 @@
             ResultBuilder
             ColumnInfo
             Helpers
-            SimpleQuery PreparedStatement PreparedQuery]
+            SimpleQuery PreparedStatement PreparedQuery DatabaseTask]
            [shadow.pgsql.types
             TypedArray
             ArrayReader
@@ -61,16 +61,11 @@
     (let [db-id (.getPoolId pool)]
       (if-let [con (get *open-connections* db-id)]
         (task-fn con)
-        (let [con (.borrowObject pool)]
-          (try
-            (let [result (binding [*open-connections* (assoc *open-connections* db-id con)]
-                           (task-fn con))]
-              (.returnObject pool con)
-              result)
-            (catch Throwable t
-              ;; FIXME: check if connection is IDLE/READY and reuse
-              (.invalidateObject pool con)
-              (throw t))))))))
+        (.withConnection pool (reify
+                                DatabaseTask
+                                (withConnection [_ con]
+                                  (binding [*open-connections* (assoc *open-connections* db-id con)]
+                                    (task-fn con)))))))))
 
 (defmacro with-connection [db & body]
   `(-with-connection ~db (fn [con#] ~@body)))

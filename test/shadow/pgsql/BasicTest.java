@@ -266,4 +266,25 @@ public class BasicTest {
         // FIXME: you call this a test?
     }
 
+
+    @Test
+    public void testCleanup() throws Exception {
+        DatabasePool pool = new DatabasePool(db);
+
+        try {
+            pool.withConnection(con -> con.prepare("DELETE FROM types"));
+            fail("should have complained");
+        } catch (IllegalStateException e) {
+        }
+
+        try {
+            pool.withConnection(con -> {
+                con.begin();
+                return null;
+            });
+            fail("should have complained");
+        } catch (IllegalStateException e) {
+        }
+    }
+
 }
