@@ -1,7 +1,6 @@
 package shadow.pgsql;
 
 import java.io.IOException;
-import java.nio.channels.SocketChannel;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
@@ -524,6 +523,6 @@ public class Connection implements AutoCloseable {
     }
 
     public boolean isReady() {
-        return state == ConnectionState.READY && txState == TransactionStatus.IDLE;
+        return state == ConnectionState.READY && txState == TransactionStatus.IDLE && openStatements == 0;
     }
 }

@@ -21,7 +21,10 @@ public class BasicTest {
 
     @Before
     public void setupConnection() throws Exception {
-        this.db = Database.setup("localhost", 5432, "zilence", "shadow_pgsql");
+        this.db = new DatabaseConfig("localhost", 5432)
+                .setUser("zilence")
+                .setDatabase("shadow_pgsql")
+                .get();
         this.pg = db.connect();
 
         pg.executeWith("DELETE FROM types");
@@ -181,7 +184,7 @@ public class BasicTest {
     @Test
     public void testByteA() throws IOException {
         try (PreparedQuery pq = roundtripQuery("binary_types", "fbytea")) {
-            byte[] send = new byte[]{0,1,3,3,7,0};
+            byte[] send = new byte[]{0, 1, 3, 3, 7, 0};
             byte[] recv = (byte[]) pq.executeWith(send);
 
             assertArrayEquals(send, recv);

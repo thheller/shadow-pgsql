@@ -4,10 +4,8 @@ import shadow.pgsql.utils.RowProcessor;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.SocketOptions;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.security.NoSuchAlgorithmException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,54 +23,19 @@ public class Database {
 
     private final Map<ColumnByTableIndex, String> columnNames = new HashMap<>();
 
-    private final String host;
-    private final int port;
+    private final DatabaseConfig config;
 
-    private final Map<String, String> connectParams;
-    private final AuthHandler authHandler;
-    private boolean ssl = false;
-
-    Database(String host, int port, Map<String, String> connectParams, AuthHandler authHandler) {
-        this.host = host;
-        this.port = port;
-        this.connectParams = connectParams;
-        this.authHandler = authHandler;
+    public Database(DatabaseConfig config) {
+        this.config = config;
     }
 
     public static Database setup(String host, int port, String user, String databaseName) throws IOException {
-        DatabaseBuilder db = new DatabaseBuilder(host, port);
+        DatabaseConfig db = new DatabaseConfig(host, port);
 
-        db.setConnectParam("user", user);
-        db.setConnectParam("database", databaseName);
+        db.setUser(user);
+        db.setDatabase(databaseName);
 
-        return db.build();
-    }
-
-
-    void enableSSL() {
-        this.ssl = true;
-    }
-
-    public boolean sslEnabled() {
-        return this.ssl;
-    }
-
-    public String getHost() {
-        return host;
-    }
-
-    public int getPort() {
-        return port;
-    }
-
-    public Map<String, String> getConnectParams() {
-        return connectParams;
-    }
-
-    void prepare() throws IOException {
-        try (Connection con = connect()) {
-            fetchSchemaInfo(con);
-        }
+        return db.get();
     }
 
     public Connection connect() throws IOException {
@@ -80,10 +43,11 @@ public class Database {
 
         IO io = null;
 
-        SocketChannel channel = SocketChannel.open(new InetSocketAddress(host, port));
+        SocketChannel channel = SocketChannel.open(new InetSocketAddress(config.host, config.port));
         channel.configureBlocking(true);
 
-        if (ssl) {
+        if (config.ssl) {
+            // http://www.postgresql.org/docs/9.0/static/protocol-flow.html#AEN84692
 
             ByteBuffer buf = ByteBuffer.allocate(8);
 
@@ -102,75 +66,72 @@ public class Database {
                 throw new IllegalStateException("ssl not accepted");
             }
 
-            try {
-                io = SSLSocketIO.start(channel, host, port);
-            } catch (NoSuchAlgorithmException e) {
-                throw new IllegalStateException("ssl algorithm missing", e);
-            }
-
+            io = SSLSocketIO.start(channel, config.sslContext, config.host, config.port);
         } else {
             io = new SocketIO(channel);
         }
 
         pg = new Connection(this, io);
-        pg.startup(connectParams, authHandler);
+        pg.startup(config.connectParams, config.authHandler);
         return pg;
     }
 
-    void fetchSchemaInfo(Connection con) throws IOException {
+    void fetchSchemaInfo() throws IOException {
         // fetch schema related things
+        try (Connection con = connect()) {
 
-        SimpleQuery pg_types = new SimpleQuery("SELECT oid, typname FROM pg_type");
-        pg_types.setRowBuilder(Helpers.ROW_AS_LIST);
-        pg_types.setResultBuilder(
-                new RowProcessor<List>() {
-                    @Override
-                    public void process(List row) {
-                        int oid = (int) row.get(0);
-                        String name = (String) row.get(1);
-                        oid2name.put(oid, name);
-                    }
-                });
-
-        int results = (int) con.executeQueryWith(pg_types);
-
-        if (results == 0) {
-            throw new IllegalStateException("no types?");
-        }
-
-        SimpleQuery schema = new SimpleQuery("SELECT" +
-                "  a.attname," + // column name
-                "  a.attnum," + // column index
-                "  b.oid," + // table oid
-                "  b.relname" + // table name
-                " FROM pg_class b" +
-                " JOIN pg_attribute a" +
-                " ON a.attrelid = b.oid" +
-                " WHERE b.relkind = 'r'" +
-                " AND a.attnum > 0" +
-                " AND b.relname NOT LIKE 'pg_%'" +
-                " AND b.relname NOT LIKE 'sql_%'"
-        );
-
-        schema.setRowBuilder(Helpers.ROW_AS_LIST);
-        schema.setResultBuilder(
-                new RowProcessor<List>() {
-                    @Override
-                    public void process(List row) {
-                        String colName = (String) row.get(0);
-                        short colIndex = (short) row.get(1);
-                        int tableOid = (int) row.get(2);
-                        String tableName = (String) row.get(3);
-
-                        columnNames.put(new ColumnByTableIndex(tableName, colIndex), colName);
-
-                        if (!oid2name.containsKey(tableOid)) {
-                            oid2name.put(tableOid, tableName);
+            SimpleQuery pg_types = new SimpleQuery("SELECT oid, typname FROM pg_type");
+            pg_types.setRowBuilder(Helpers.ROW_AS_LIST);
+            pg_types.setResultBuilder(
+                    new RowProcessor<List>() {
+                        @Override
+                        public void process(List row) {
+                            int oid = (int) row.get(0);
+                            String name = (String) row.get(1);
+                            oid2name.put(oid, name);
                         }
-                    }
-                });
+                    });
 
-        con.executeQueryWith(schema);
+            int results = (int) con.executeQueryWith(pg_types);
+
+            if (results == 0) {
+                throw new IllegalStateException("no types?");
+            }
+
+            SimpleQuery schema = new SimpleQuery("SELECT" +
+                    "  a.attname," + // column name
+                    "  a.attnum," + // column index
+                    "  b.oid," + // table oid
+                    "  b.relname" + // table name
+                    " FROM pg_class b" +
+                    " JOIN pg_attribute a" +
+                    " ON a.attrelid = b.oid" +
+                    " WHERE b.relkind = 'r'" +
+                    " AND a.attnum > 0" +
+                    " AND b.relname NOT LIKE 'pg_%'" +
+                    " AND b.relname NOT LIKE 'sql_%'"
+            );
+
+            schema.setRowBuilder(Helpers.ROW_AS_LIST);
+            schema.setResultBuilder(
+                    new RowProcessor<List>() {
+                        @Override
+                        public void process(List row) {
+                            String colName = (String) row.get(0);
+                            short colIndex = (short) row.get(1);
+                            int tableOid = (int) row.get(2);
+                            String tableName = (String) row.get(3);
+
+                            columnNames.put(new ColumnByTableIndex(tableName, colIndex), colName);
+
+                            if (!oid2name.containsKey(tableOid)) {
+                                oid2name.put(tableOid, tableName);
+                            }
+                        }
+                    });
+
+            con.executeQueryWith(schema);
+        }
     }
 
     public String getNameForColumn(String tableName, int positionInTable) {

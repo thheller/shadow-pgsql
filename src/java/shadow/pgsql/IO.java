@@ -9,5 +9,6 @@ import java.nio.ByteBuffer;
  */
 public interface IO extends Closeable {
     public void send(ByteBuffer buf) throws IOException;
+
     public void recv(ByteBuffer buf) throws IOException;
 }

@@ -38,7 +38,7 @@
 (in-ns 'user)
 
 (defn get-dependents-of-ns [ns-sym]
-  (get-in (ns/get-tracker) [:clojure.tools.namespace.track/deps :dependents ns-sym]))
+  (get-in (ns/get-tracker) [:clojure.tools.namespace.track/deps :dependents ns-sym])) 
 
 (defn get-ns-of-file [^File file]
   (get-in (ns/get-tracker) [:clojure.tools.namespace.file/filemap (.getAbsoluteFile file)]))
@@ -75,17 +75,17 @@
                      (let [once-fixture-fn (test/join-fixtures (:clojure.test/once-fixtures (meta ns)))
                            each-fixture-fn (test/join-fixtures (:clojure.test/each-fixtures (meta ns)))]
                        (once-fixture-fn
-                        (fn []
-                          (doseq [v (vals (ns-interns ns))]
-                            (let [vm (meta v)]
-                              (when (and (:test vm)
-                                         (some #(get vm %) tags))
-                                (each-fixture-fn (fn []
-                                                   (println "- " (:name vm))
-                                                   (test/test-var v)))))))))
+                         (fn []
+                           (doseq [v (vals (ns-interns ns))]
+                             (let [vm (meta v)]
+                               (when (and (:test vm)
+                                          (some #(get vm %) tags))
+                                 (each-fixture-fn (fn []
+                                                    (println "- " (:name vm))
+                                                    (test/test-var v)))))))))
                      (test/do-report {:type :end-test-ns, :ns ns}))
                    (merge-with + total-count @test/*report-counters*)))))
-      
+
       (println (str "Runtime: " (- (System/currentTimeMillis) start) "ms"))
       (.flush System/out))
     ))
@@ -95,11 +95,11 @@
 
 (comment
   (defun cider-run-tests ()
-    (interactive)
-    (cider-find-and-clear-repl-buffer)
-    (cider-eval (concat "(run-applicable-tests [\"" buffer-file-name "\"])")
-                (cider-interactive-eval-handler (current-buffer))
-                "user"))
+         (interactive)
+         (cider-find-and-clear-repl-buffer)
+         (cider-eval (concat "(run-applicable-tests [\"" buffer-file-name "\"])")
+                     (cider-interactive-eval-handler (current-buffer))
+                     "user"))
   (global-set-key (kbd "s-r") 'cider-run-tests))
 
 (defn run-applicable-tests [modified-files]
@@ -116,4 +116,4 @@
         (println "================================================================================")
         (run-tests tests-to-run #{:wip})
         (println "================================================================================"))
-    )))
+      )))

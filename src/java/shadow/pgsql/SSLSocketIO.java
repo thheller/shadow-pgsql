@@ -8,7 +8,6 @@ import java.io.EOFException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
-import java.security.NoSuchAlgorithmException;
 
 /**
  * Created by zilence on 23.08.14.
@@ -43,6 +42,8 @@ public class SSLSocketIO implements IO {
 
         SSLEngineResult res;
 
+        boolean firstUnwrap = true;
+
         HANDSHAKE:
         while (true) {
             SSLEngineResult.HandshakeStatus hs = ssl.getHandshakeStatus();
@@ -55,16 +56,23 @@ public class SSLSocketIO implements IO {
                     break HANDSHAKE;
 
                 case NEED_UNWRAP: {
-                    // FIXME: blocking here after ServerHello, can't figure out why, server is supposed to send something
-                    if (channel.read(sslIn) < 0) {
-                        throw new IllegalStateException("eof while handshaking");
+                    // FIXME: the handshake is clearly not made for blocking operation
+                    // what to do if sslIn has remaining bytes but not enough to unwrap?
+                    // probably try ssl.unwrap first, on BUFFER_UNDERFLOW, read more?
+                    // FIXME: this is pretty unstable code! assumes we received everything we need in one go
+                    // which is what postgres does most of the time I guess
+                    if (firstUnwrap || !sslIn.hasRemaining()) {
+                        sslIn.clear();
+                        if (channel.read(sslIn) < 0) {
+                            throw new IllegalStateException("eof while handshaking");
+                        }
+
+                        sslIn.flip();
+
+                        firstUnwrap = false;
                     }
 
-                    sslIn.flip();
-
                     res = ssl.unwrap(sslIn, in);
-                    sslIn.compact();
-
                     if (res.getStatus() != SSLEngineResult.Status.OK) {
                         throw new IllegalStateException("not ok?");
                     }
@@ -99,46 +107,122 @@ public class SSLSocketIO implements IO {
             }
         }
 
-        System.out.println("yo");
+        in.clear();
+        in.flip();
+
+        out.clear();
+
+        sslIn.clear();
+        sslIn.flip();
+
+        sslOut.clear();
+    }
+
+    void putLimit(ByteBuffer src, ByteBuffer dest) {
+        int available = src.remaining();
+        int needed = dest.remaining();
+        int limit = src.limit();
+
+        if (available > needed) {
+            src.limit(src.position() + needed);
+        }
+
+        dest.put(src);
+
+        src.limit(limit);
     }
 
     @Override
     public void send(ByteBuffer buf) throws IOException {
 
         while (buf.hasRemaining()) {
-            out.put(buf);
-            out.flip();
+            SSLEngineResult result = ssl.wrap(buf, sslOut);
 
-            ssl.wrap(out, sslOut);
+            if (result.getStatus() != SSLEngineResult.Status.OK) {
+                throw new IllegalStateException("ssl not ok?");
+            }
+
+            sslOut.flip();
 
             while (sslOut.hasRemaining()) {
                 if (channel.write(sslOut) < 0) {
                     throw new EOFException();
                 }
             }
-        }
 
-        System.out.println("yo");
+            sslOut.clear();
+        }
     }
 
     @Override
     public void recv(ByteBuffer buf) throws IOException {
-        throw new UnsupportedOperationException("recv");
+        // FIXME: this is so ugly, seems to work but is no way ideal
+        // buffer underflow makes this weird
+        // sometimes sslIn contain enough for 2 unwraps, yet calling unwrap does not unwrap all bytes
+        // sometimes we just don't have enough bytes
+        // impossible to tell before calling unwrap
+        // there should only be one place we call channel.read
+
+        while (buf.hasRemaining()) {
+            // we need more bytes
+
+            if (in.hasRemaining()) {
+                // have some
+                putLimit(in, buf);
+            } else if (sslIn.hasRemaining()) {
+                in.clear();
+
+                SSLEngineResult result = ssl.unwrap(sslIn, in);
+
+                switch (result.getStatus()) {
+                    case OK:
+                        sslIn.compact();
+                        sslIn.flip();
+                        break;
+                    case BUFFER_UNDERFLOW:
+                        sslIn.position(sslIn.limit());
+                        sslIn.limit(sslIn.capacity());
+
+                        if (channel.read(sslIn) < 0) {
+                            throw new EOFException();
+                        }
+                        sslIn.flip();
+                        break;
+                    default:
+                        throw new IllegalStateException("how do you get into a buffer overflow?");
+                }
+
+                in.flip();
+            } else {
+                in.clear();
+
+                sslIn.clear();
+                channel.read(sslIn);
+                sslIn.flip();
+
+                SSLEngineResult result = ssl.unwrap(sslIn, in);
+
+                if (result.getStatus() != SSLEngineResult.Status.OK) {
+                    throw new IllegalStateException("ssl not ok?");
+                }
+
+                in.flip();
+            }
+        }
+
+        buf.flip();
     }
 
     @Override
     public void close() throws IOException {
-        throw new UnsupportedOperationException("close");
+        // FIXME: proper ssl shutdown
+        channel.close();
     }
 
-    public static SSLSocketIO start(SocketChannel channel, String host, int port) throws IOException, NoSuchAlgorithmException {
-        SSLContext context = SSLContext.getDefault();
-
+    public static SSLSocketIO start(SocketChannel channel, SSLContext context, String host, int port) throws IOException {
         SSLEngine engine = context.createSSLEngine(host, port);
 
         engine.setUseClientMode(true);
-        engine.setWantClientAuth(false);
-        engine.setNeedClientAuth(false);
 
         SSLSocketIO io = new SSLSocketIO(channel, engine);
         io.handshake();
