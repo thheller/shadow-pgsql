@@ -55,7 +55,7 @@ public abstract class PreparedBase implements AutoCloseable {
                     }
                 }
             } catch (Exception e) {
-                throw new IllegalArgumentException(String.format("Failed to encode parameter $%d", i + 1), e);
+                throw new IllegalArgumentException(String.format("Failed to encode parameter $%d [%s]", i + 1, param), e);
             }
         }
 

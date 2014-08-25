@@ -2,6 +2,7 @@ package shadow.pgsql.types;
 
 import shadow.pgsql.Connection;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.OffsetDateTime;
 import java.time.ZoneId;
@@ -75,23 +76,24 @@ public class Types {
     public static final Date DATE = new Date();
 
     public static final Int2 INT2 = new Int2(OID_INT2);
-    public static final TypedArray INT2_ARRAY = new TypedArray(INT2, TypedArray.makeReader(Short.TYPE));
+    public static final TypedArray INT2_ARRAY = new TypedArray(INT2, TypedArray.makeReader(Short.TYPE), false);
 
     public static final Int4 OID = new Int4(OID_OID);
     public static final Int4 INT4 = new Int4(OID_INT4);
-    public static final TypedArray INT4_ARRAY = new TypedArray(INT4, TypedArray.makeReader(Integer.TYPE));
+    public static final TypedArray INT4_ARRAY = new TypedArray(INT4, TypedArray.makeReader(Integer.TYPE), false);
 
     public static final Int8 INT8 = new Int8(OID_INT8);
-    public static final TypedArray INT8_ARRAY = new TypedArray(INT8, TypedArray.makeReader(Long.TYPE));
+    public static final TypedArray INT8_ARRAY = new TypedArray(INT8, TypedArray.makeReader(Long.TYPE), false);
 
     public static final Numeric NUMERIC = new Numeric();
+    public static final TypedArray NUMERIC_ARRAY = new TypedArray(NUMERIC, TypedArray.makeReader(BigDecimal.class), false);
 
     public static final Text NAME = new Text(OID_NAME);
     public static final Text TEXT = new Text(OID_TEXT);
-    public static final TypedArray TEXT_ARRAY = new TypedArray(TEXT, TypedArray.makeReader(String.class));
+    public static final TypedArray TEXT_ARRAY = new TypedArray(TEXT, TypedArray.makeReader(String.class), true);
     public static final Text CHAR = new Text(OID_CHAR);
     public static final Text VARCHAR = new Text(OID_VARCHAR);
-    public static final TypedArray VARCHAR_ARRAY = new TypedArray(VARCHAR, TypedArray.makeReader(String.class));
+    public static final TypedArray VARCHAR_ARRAY = new TypedArray(VARCHAR, TypedArray.makeReader(String.class), true);
 
 
     public static final ByteA BYTEA = new ByteA();
@@ -99,4 +101,5 @@ public class Types {
     public static final Bool BOOL = new Bool();
     public static final Float4 FLOAT4 = new Float4();
     public static final Float8 FLOAT8 = new Float8();
+    public static final int OID_NUMERIC = 1700;
 }

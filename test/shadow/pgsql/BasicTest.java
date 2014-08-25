@@ -5,6 +5,7 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.*;
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +31,7 @@ public class BasicTest {
         pg.executeWith("DELETE FROM types");
         pg.executeWith("DELETE FROM num_types");
         pg.executeWith("DELETE FROM timestamp_types");
-        pg.executeWith("DELETE FROM array_types");
+        // pg.executeWith("DELETE FROM array_types");
     }
 
     @After
@@ -144,6 +145,28 @@ public class BasicTest {
         }
     }
 
+    public void roundtrip(PreparedQuery pq, Object value) throws IOException {
+        assertEquals(value, pq.executeWith(value));
+    }
+
+    @Test
+    public void testNumeric() throws IOException {
+        // Object result = pg.executeQueryWith("SELECT fnumeric FROM num_types ORDER BY fnumeric");
+
+        try (PreparedQuery pq = roundtripQuery("num_types", "fnumeric")) {
+            roundtrip(pq, new BigDecimal("0.123456789"));
+            roundtrip(pq, new BigDecimal("1.23456789"));
+            roundtrip(pq, new BigDecimal("12.3456789"));
+            roundtrip(pq, new BigDecimal("123.456789"));
+            roundtrip(pq, new BigDecimal("1234.56789"));
+            roundtrip(pq, new BigDecimal("12345.6789"));
+            roundtrip(pq, new BigDecimal("123456.789"));
+            roundtrip(pq, new BigDecimal("1234567.89"));
+            roundtrip(pq, new BigDecimal("12345678.9"));
+            roundtrip(pq, new BigDecimal("123456789.0"));
+        }
+    }
+
     public PreparedQuery roundtripQuery(String table, String field) throws IOException {
         SimpleQuery q = new SimpleQuery(String.format("INSERT INTO %s (%s) VALUES ($1) RETURNING %s", table, field, field));
         q.setRowBuilder(Helpers.ONE_COLUMN);
@@ -217,6 +240,34 @@ public class BasicTest {
 
             recv = (String[]) pq.executeWith(sendList);
             // FIXME: compare
+        }
+    }
+
+    @Test
+    public void testNumericArray() throws IOException {
+        Object result = pg.executeQueryWith("SELECT anumeric FROM array_types");
+
+        try (PreparedQuery pq = roundtripQuery("array_types", "anumeric")) {
+            BigDecimal[] send = new BigDecimal[]{
+                    new BigDecimal("0.123456789"),
+                    new BigDecimal("1.23456789"),
+                    new BigDecimal("12.3456789"),
+                    new BigDecimal("123.456789"),
+                    new BigDecimal("1234.56789"),
+                    new BigDecimal("12345.6789"),
+                    new BigDecimal("123456.789"),
+                    new BigDecimal("1234567.89"),
+                    new BigDecimal("12345678.9"),
+                    new BigDecimal("123456789.0")
+            };
+
+            // lol varargs ...
+            List params = new ArrayList();
+            params.add(send);
+
+            BigDecimal[] recv = (BigDecimal[]) pq.execute(params);
+
+            assertArrayEquals(send, recv);
         }
     }
 

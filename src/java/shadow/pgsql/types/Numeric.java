@@ -13,14 +13,13 @@ import java.nio.ByteBuffer;
  * Created by zilence on 10.08.14.
  */
 public class Numeric implements TypeHandler {
-    public static final int OID = 1700;
 
     Numeric() {
     }
 
     @Override
     public int getTypeOid() {
-        return OID;
+        return Types.OID_NUMERIC;
     }
 
     @Override
@@ -30,30 +29,37 @@ public class Numeric implements TypeHandler {
 
     @Override
     public void encodeBinary(Connection con, ProtocolOutput output, Object param) {
-        throw new AbstractMethodError("need to figure this out first");
+        NBase nbase = NBase.pack((BigDecimal) param);
+
+        output.int16((short) nbase.digits.length);
+        output.int16(nbase.weight);
+        output.int16(nbase.sign);
+        output.int16(nbase.dscale);
+
+        for (short v : nbase.digits) {
+            output.int16(v);
+        }
+    }
+
+    @Override
+    public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int colSize) throws IOException {
+        final short ndigits = buf.getShort();
+        final short weight = buf.getShort();
+        final short sign = buf.getShort();
+        final short dscale = buf.getShort();
+
+        short[] digits = new short[ndigits];
+
+        for (int i = 0; i < ndigits; i++) {
+            digits[i] = buf.getShort();
+        }
+
+        return NBase.unpack(weight, sign, dscale, digits);
     }
 
     @Override
     public String encodeToString(Connection con, Object param) {
         return ((BigDecimal) param).toPlainString();
-    }
-
-    @Override
-    public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int colSize) throws IOException {
-        // FIXME: I HAVE NO IDEA WHAT I'M DOING!
-
-        final int ndigits = buf.getShort();
-        final int weight = buf.getShort(); // what does this mean?
-        final int sign = buf.getShort();
-        final int rscale = buf.getShort(); // pos of decimal point from right
-
-        StringBuilder sb = new StringBuilder();
-        int[] digits = new int[ndigits];
-        for (int i = 0; i < ndigits; i++) {
-            digits[i] = buf.getShort();
-        }
-
-        throw new UnsupportedOperationException("TBD: figure out the rest");
     }
 
     @Override

@@ -9,15 +9,20 @@ import java.io.IOException;
 import java.lang.reflect.Array;
 import java.nio.ByteBuffer;
 import java.util.Collection;
+import java.util.Iterator;
 
+// FIXME: this is probably a reflection nightmare
+// FIXME: nested arrays
+// FIXME: text[] quoting (although text[] should use binary, so no quoting needed)
 /**
  * Created by zilence on 10.08.14.
  */
-// FIXME: this is probably a reflection nightmare
 public class TypedArray implements TypeHandler {
-    private final int oid;
     private final TypeHandler itemType;
     private final ArrayReader arrayReader;
+    private final boolean requiresQuoting;
+
+    private final int oid;
 
     public static ArrayReader makeReader(Class elementType) {
         return new ArrayReader() {
@@ -45,10 +50,13 @@ public class TypedArray implements TypeHandler {
     }
 
     public TypedArray(TypeHandler itemType, ArrayReader arrayReader) {
-        if (!itemType.supportsBinary()) {
-            throw new IllegalArgumentException("only binary arrays implemented");
-        }
+        this(itemType, arrayReader, true);
+    }
 
+    public TypedArray(TypeHandler itemType, ArrayReader arrayReader, boolean requiresQuoting) {
+        if (itemType == null) {
+            throw new IllegalArgumentException("Need TypeHandler");
+        }
         if (arrayReader == null) {
             throw new IllegalArgumentException("Need ArrayReader");
         }
@@ -56,6 +64,7 @@ public class TypedArray implements TypeHandler {
         this.oid = arrayOidForType(itemType);
         this.itemType = itemType;
         this.arrayReader = arrayReader;
+        this.requiresQuoting = requiresQuoting;
     }
 
     public static int arrayOidForType(TypeHandler type) {
@@ -70,6 +79,8 @@ public class TypedArray implements TypeHandler {
                 return 1009;
             case Types.OID_VARCHAR:
                 return 1015;
+            case Types.OID_NUMERIC:
+                return 1231;
             default:
                 throw new IllegalArgumentException(String.format("don't know array oid for type: [%d,%s]", type.getTypeOid(), type.getClass().getName()));
         }
@@ -82,7 +93,7 @@ public class TypedArray implements TypeHandler {
 
     @Override
     public boolean supportsBinary() {
-        return true; // binary-only actually
+        return itemType.supportsBinary();
     }
 
     @Override
@@ -150,10 +161,6 @@ public class TypedArray implements TypeHandler {
         }
     }
 
-    @Override
-    public String encodeToString(Connection con, Object param) {
-        throw new UnsupportedOperationException("TBD");
-    }
 
     @Override
     public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int colSize) throws IOException {
@@ -190,9 +197,78 @@ public class TypedArray implements TypeHandler {
     }
 
     @Override
-    public Object decodeString(Connection con, ColumnInfo field, String value) {
-        throw new UnsupportedOperationException("TBD");
+    public String encodeToString(Connection con, Object param) {
+        if (requiresQuoting) {
+            throw new UnsupportedOperationException("TBD: quoting array values");
+        }
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("{");
+
+        if (param instanceof Collection) {
+            Collection coll = (Collection) param;
+            int length = coll.size();
+
+            Iterator i = coll.iterator();
+            while (i.hasNext()) {
+                Object value = i.next();
+                if (value == null) {
+                    sb.append("NULL");
+                } else {
+                    sb.append(itemType.encodeToString(con, value));
+                }
+                if (i.hasNext()) {
+                    sb.append(",");
+                }
+            }
+        } else if (param.getClass().isArray()) {
+            int length = Array.getLength(param);
+
+            for (int i = 0; i < length; i++) {
+                Object value = Array.get(param, i);
+                if (value == null) {
+                    sb.append("NULL");
+                } else {
+                    sb.append(itemType.encodeToString(con, value));
+                }
+                if (i < length - 1) {
+                    sb.append(",");
+                }
+            }
+        } else {
+            throw new IllegalArgumentException(String.format("param is not an array or Collection: %s", param.getClass().getName()));
+        }
+
+        sb.append("}");
+        return sb.toString();
     }
 
+    @Override
+    public Object decodeString(Connection con, ColumnInfo field, String value) {
+        if (value.charAt(0) != '{' || value.charAt(value.length() - 1) != '}') {
+            throw new IllegalArgumentException(String.format("Can't parse this: %s", value));
+        }
 
+        // no quotes
+        if (!value.contains("\"")) {
+            if (value.indexOf("{", 1) != -1) {
+                throw new UnsupportedOperationException(String.format("Can't parse nested arrays: %s", value));
+            }
+
+            String[] parts = value.substring(1, value.length() - 1).split(",");
+
+            Object arr = arrayReader.init(parts.length);
+            for (int i = 0; i < parts.length; i++) {
+                String part = parts[i];
+                if (part.equals("NULL")) {
+                    arr = arrayReader.addNull(arr, i);
+                } else {
+                    arr = arrayReader.add(arr, i, itemType.decodeString(con, field, part));
+                }
+            }
+            return arrayReader.complete(arr);
+        } else {
+            throw new UnsupportedOperationException((String.format("parse with quotes: %s", value)));
+        }
+    }
 }
