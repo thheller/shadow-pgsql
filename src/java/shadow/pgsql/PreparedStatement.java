@@ -22,6 +22,11 @@ public class PreparedStatement extends PreparedBase {
         return statement;
     }
 
+    @Override
+    public String getSQLString() {
+        return statement.getSQLString();
+    }
+
     public StatementResult executeWith(Object... queryParams) throws IOException {
         return execute(Arrays.asList(queryParams));
     }

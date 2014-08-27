@@ -18,6 +18,8 @@ public abstract class PreparedBase implements AutoCloseable {
         this.typeEncoders = typeEncoders;
     }
 
+    public abstract String getSQLString();
+
     protected void writeBind(TypeHandler[] typeDecoders, List<Object> queryParams, String portalId) {
         // Bind
         pg.output.beginCommand('B');
@@ -55,7 +57,7 @@ public abstract class PreparedBase implements AutoCloseable {
                     }
                 }
             } catch (Exception e) {
-                throw new IllegalArgumentException(String.format("Failed to encode parameter $%d [%s]", i + 1, param), e);
+                throw new IllegalArgumentException(String.format("SQL:[%s] Failed to encode parameter $%d [%s]", getSQLString(), i + 1, param), e);
             }
         }
 

@@ -25,6 +25,11 @@ public class PreparedQuery extends PreparedBase {
         this.rowBuilder = rowBuilder;
     }
 
+    @Override
+    public String getSQLString() {
+        return query.getSQLString();
+    }
+
     public Object executeWith(Object... params) throws IOException {
         return execute(Arrays.asList(params));
     }
@@ -116,12 +121,12 @@ public class PreparedQuery extends PreparedBase {
             }
         }
 
-        if (!complete) {
-            throw new IllegalStateException("Command did not complete");
-        }
-
         if (errorData != null) {
             throw new CommandException(String.format("Failed to execute Query: %s", query.getSQLString()), errorData);
+        }
+
+        if (!complete) {
+            throw new IllegalStateException("Command did not complete");
         }
 
         return resultBuilder.complete(queryResult);

@@ -31,7 +31,7 @@ public class BasicTest {
         pg.executeWith("DELETE FROM types");
         pg.executeWith("DELETE FROM num_types");
         pg.executeWith("DELETE FROM timestamp_types");
-        // pg.executeWith("DELETE FROM array_types");
+        pg.executeWith("DELETE FROM array_types");
     }
 
     @After

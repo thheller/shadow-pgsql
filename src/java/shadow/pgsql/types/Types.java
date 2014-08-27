@@ -27,6 +27,8 @@ public class Types {
     public static final int OID_TIMESTAMP = 1114;
     public static final int OID_TIMESTAMPTZ = 1184;
 
+    public static final int OID_NUMERIC = 1700;
+
     // how do you define variable length fields in text
     // "yyyy-MM-dd HH:mm:ss.SSS"
     public static final Timestamp TIMESTAMP = new Timestamp(OID_TIMESTAMP,
@@ -101,5 +103,4 @@ public class Types {
     public static final Bool BOOL = new Bool();
     public static final Float4 FLOAT4 = new Float4();
     public static final Float8 FLOAT8 = new Float8();
-    public static final int OID_NUMERIC = 1700;
 }

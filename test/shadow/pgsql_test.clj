@@ -80,12 +80,22 @@
   {:table :types
    :columns [:t-int2]
    :returning [:id]
-   :merge-fn (fn [row id] id)})
+   :merge-fn (fn [row insert]
+               (:id insert))})
 
 (deftest test-update
   (with-open [db (test-db)]
 
     (let [id (sql/insert-one db ?insert-t-int2 {:t-int2 1})]
+
+      (is (= {:t-int2 2} (sql/insert-one! db :types {:t-int2 2})))
+
+      (is (number? (sql/insert-one! db :types {:t-int2 2} :id)))
+
+      (let [m (sql/insert-one! db :types {:t-int2 2} [:id])]
+        (is (map? m))
+        (is (= 2 (:t-int2 m)))
+        (is (pos? (:id m))))
 
       (sql/update db :types {:t-int2 3} "id = $1" id)
 

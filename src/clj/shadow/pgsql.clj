@@ -1,5 +1,6 @@
 (ns shadow.pgsql
-  (:import [shadow.pgsql
+  (:import [java.time OffsetDateTime]
+           [shadow.pgsql
             Database
             DatabasePool
             Connection
@@ -11,7 +12,7 @@
             ResultBuilder
             ColumnInfo
             Helpers
-            SimpleQuery PreparedStatement PreparedQuery DatabaseTask]
+            SimpleQuery PreparedStatement PreparedQuery DatabaseTask DatabaseConfig]
            [shadow.pgsql.types
             TypedArray
             ArrayReader
@@ -71,29 +72,32 @@
   `(-with-connection ~db (fn [con#] ~@body)))
 
 (defmacro with-transaction [db & body]
-  `(-with-connection ~db (fn [^Connection con#]
-                           (.begin con#)
-                           (try
-                             (let [result# (do ~@body)]
-                               (.commit con#)
-                               result#)
-                             (catch Throwable t#
-                               (.rollback con#)
-                               (throw t#)
-                               )))))
+  `(let [body-fn# (fn [] ~@body)]
+     (-with-connection ~db (fn [^Connection con#]
+                             (if (.isInTransaction con#)
+                               (body-fn#)
+                               (do (.begin con#)
+                                   (try
+                                     (let [result# (body-fn#)]
+                                       (.commit con#)
+                                       result#)
+                                     (catch Throwable t#
+                                       (.rollback con#)
+                                       (throw t#)
+                                       ))))))))
 
 (defn ^Connection get-connection [db]
   (if-let [con (-get-connection db)]
     con
-    (throw (IllegalStateException. "no open connection found, use with-connection/with-transaction"))
+    (throw (IllegalStateException. "no open connection found, use within with-connection/with-transaction"))
     ))
 
 (defn- quoted [^String s]
-  (when-not (= -1 (.indexOf s "\""))
+  (when (.contains s "\"")
     (throw (ex-info "names cannot contain quotes" {:s s})))
   (str \" s \"))
 
-(deftype ClojureMapBuilder [column-names]
+(deftype ClojureMapBuilder [column-names transform-fn]
   RowBuilder
   (init [_]
     (transient {}))
@@ -105,7 +109,7 @@
       (assoc! state (nth column-names col-index) col-value)))
 
   (complete [_ state]
-    (persistent! state)))
+    (transform-fn (persistent! state))))
 
 (def result->vec
   (reify
@@ -132,13 +136,18 @@
     (complete [_ state]
       (persistent! state))))
 
-(defn row->map
-  [{:keys [column-naming] :as db} columns]
-  (let [column-names (->> columns
-                          (map #(.-name ^ColumnInfo %))
-                          (map #(from-sql-name column-naming %))
-                          (into []))]
-    (ClojureMapBuilder. column-names)))
+(defn row->map-transform
+  "returns row as map after calling (transform-fn map)"
+  [transform-fn]
+  (fn [{:keys [column-naming] :as db} columns]
+    (let [column-names (->> columns
+                            (map #(.-name ^ColumnInfo %))
+                            (map #(from-sql-name column-naming %))
+                            (into []))]
+      (ClojureMapBuilder. column-names transform-fn))))
+
+(def row->map
+  (row->map-transform identity))
 
 (defn row->one-column
   "row is returned as the value of the first (only) column"
@@ -150,8 +159,11 @@
   [db columns]
   Helpers/ONE_ROW)
 
-(def ^{:doc "stores keywords as text without the : so :hello/world is \"hello/world\" "}
-  keyword-type
+(defn now []
+  (OffsetDateTime/now))
+
+(def ^{:doc "stores keywords without leading \":\""}
+  legacy-keyword-type
   (Text.
     (reify Text$Conversion
       (encode [_ param]
@@ -159,11 +171,32 @@
           (throw (IllegalArgumentException. (format "not a keyword: %s" (pr-str param)))))
         (.substring (str param) 1))
       (decode [_ ^String s]
+        (when (= \: (.charAt s 0))
+          (throw (ex-info "keyword with a :" {:s s})))
+
         (let [idx (.indexOf s "/")]
           (if (not= -1 idx)
             (keyword (.substring s 0 idx)
                      (.substring s idx))
             (keyword s)))))))
+
+(def ^{:doc "stores keywords as-is"}
+  keyword-type
+  (Text.
+    (reify Text$Conversion
+      (encode [_ param]
+        (when-not (keyword? param)
+          (throw (IllegalArgumentException. (format "not a keyword: %s" (pr-str param)))))
+        (str param))
+      (decode [_ ^String s]
+        (when-not (= \: (.charAt s 0))
+          (throw (ex-info "not a keyword" {:s s})))
+
+        (let [idx (.indexOf s "/")]
+          (if (not= -1 idx)
+            (keyword (.substring s 1 idx)
+                     (.substring s idx))
+            (keyword (.substring s 1))))))))
 
 (defn edn-type
   ([]
@@ -191,8 +224,13 @@
       (persistent! state))))
 
 (defn set-type
-  [item-type]
-  (TypedArray. item-type clojure-set-reader))
+  ([item-type]
+   (set-type item-type true))
+  ([item-type requires-quoting]
+   (TypedArray. item-type clojure-set-reader requires-quoting)))
+
+(def keyword-set-type
+  (set-type keyword-type))
 
 (def ^:private clojure-vec-reader
   (reify
@@ -208,10 +246,45 @@
       (persistent! state))))
 
 (defn vec-type
-  [item-type]
-  (TypedArray. item-type clojure-vec-reader))
+  ([item-type]
+   (vec-type item-type true))
+  ([item-type requires-quoting]
+   (TypedArray. item-type clojure-vec-reader requires-quoting)))
+
+(def keyword-vec-type
+  (vec-type keyword-type))
+
+(def int2-vec-type
+  (vec-type Types/INT2 false))
+
+(def int2-type Types/INT2)
+(def short-type Types/INT2)
+
+(def int-type Types/INT4)
+(def int4-type Types/INT4)
+
+(def int8-type Types/INT8)
+(def long-type Types/INT8)
+
+(def int4-vec-type
+  (vec-type Types/INT4 false))
+
+(def int8-vec-type
+  (vec-type Types/INT8 false))
+
+(def numeric-vec-type
+  (vec-type Types/NUMERIC))
 
 (def text-type Types/TEXT)
+
+(def text-vec-type
+  (vec-type text-type))
+
+(def timestamp-type
+  Types/TIMESTAMP)
+
+(def timestamptz-type
+  Types/TIMESTAMPTZ)
 
 (deftype ClojureStatement [db sql params types]
   Statement
@@ -338,8 +411,7 @@
     :as args
     :or {columns-fn (fn [row columns]
                       (mapv #(get row %) columns))
-         merge-fn (fn [row id]
-                    (assoc row :id id))}}
+         merge-fn merge}}
    data]
   (when-not (and (vector? columns)
                  (seq columns))
@@ -349,7 +421,8 @@
         table-name (to-sql-name table-naming table)
 
         result-builder (or result-builder sql/result->one-row)
-        row-builder (or row-builder sql/row->one-column)
+
+        row-builder (or row-builder sql/row->map)
 
         column-names (->> columns
                           (map #(to-sql-name column-naming %)))
@@ -358,9 +431,14 @@
                          (map #(.getTypeHandlerForColumn types table-name %))
                          (into []))
 
-        returning-names (->> returning
-                             (map #(to-sql-name column-naming %))
-                             (map quoted))
+        returning? (and (not (nil? returning))
+                        (not (empty? returning)))
+
+        returning-names (if returning?
+                          (->> returning
+                               (map #(to-sql-name column-naming %))
+                               (map quoted))
+                          ["1"])
 
         sql (str "INSERT INTO "
                  table-name
@@ -386,12 +464,66 @@
              (reduce (fn [result row]
                        (let [params (columns-fn row columns)
                              row-result (.execute prep params)]
-                         (conj! result (merge-fn row row-result))))
+                         (if returning?
+                           (conj! result (merge-fn row row-result))
+                           (conj! result row)
+                           )))
                      (transient []))
              (persistent!))))))
 
 (defn insert-one [db stmt data]
   (first (insert db stmt [data])))
+
+;; FIXME: this might be too confusing
+(defn insert-one!
+  "shorthand for insert-one, but potential DANGER!
+
+   don't use with maps you got from an untrusted source
+   will insert all values contained in the data map
+
+   if you expect
+   {:user \"name\" :password \"me\"}
+   but the user sends you
+   {:user \"name\" :password \"me\" :admin true}
+   you might run into trouble
+
+   use insert-one and specify {:columns [:user :password]} if you want to be safe.
+
+   (sql/insert-one! db :table data) returns the inserted data
+   (sql/insert-one! db :table data :id) returns the id of the inserted row
+   (sql/insert-one! db :table data [:id]) returns the data merged with the resulting map {:id ...}
+   "
+  ([db table data]
+   (insert-one! db table data nil))
+  ([db table data return-column]
+   (first (insert db
+                  {:table table
+                   :columns (into [] (keys data))
+                   :merge-fn (fn [row insert]
+                               (cond
+                                 (nil? return-column)
+                                 row
+
+                                 (keyword? return-column)
+                                 (get insert return-column)
+
+                                 (vector? return-column)
+                                 (merge row insert)))
+                   :returning (cond
+                                (nil? return-column)
+                                nil
+
+                                (keyword? return-column)
+                                [return-column]
+
+                                (vector? return-column)
+                                return-column
+
+                                :else
+                                (throw (ex-info "invalid return value" {:table table
+                                                                        :data data
+                                                                        :return return-column})))}
+                  [data]))))
 
 (defn prepare [db stmt]
   (let [connection (get-connection db)
@@ -454,28 +586,6 @@
                  where)]
     (apply execute db sql (concat params (vals data)))))
 
-(defn start
-  [{:keys [host
-           port
-           user
-           database
-           pool
-           table-naming
-           column-naming
-           types]
-    :or {host "localhost"
-         port 5432
-         table-naming (DefaultNaming.)
-         column-naming (DefaultNaming.)
-         types TypeRegistry/DEFAULT}
-    :as opts}]
-
-  ;; FIXME: validate args
-  (let [db (Database/setup host port user database)
-        pool (DatabasePool. db)]
-    (DB. pool table-naming column-naming types opts)
-    ))
-
 (defn build-types
   ([type-map table-naming column-naming]
    (build-types TypeRegistry/DEFAULT type-map table-naming column-naming))
@@ -506,5 +616,62 @@
 
     (assoc db :types (.build new-registry))))
 
+(defn start
+  [{:keys [host
+           port
+           user
+           database
+           pool
+           table-naming
+           column-naming
+           types]
+    :or {host "localhost"
+         port 5432
+         table-naming (DefaultNaming.)
+         column-naming (DefaultNaming.)
+         types TypeRegistry/DEFAULT}
+    :as opts}]
+
+  ;; FIXME: validate args
+  (let [db-config (doto (DatabaseConfig. host port)
+                    (.setUser user)
+                    (.setDatabase database))
+        db (.get db-config)
+        pool (DatabasePool. db)]
+    (-> (DB. pool table-naming column-naming types opts)
+        ;; vec is a better default than arrays
+        (with-default-types int2-vec-type
+                            int4-vec-type
+                            int8-vec-type
+                            text-vec-type
+                            numeric-vec-type))))
+
 (defn stop [db]
   (.close ^java.lang.AutoCloseable db))
+
+(defrecord DefQuery [stmt]
+  clojure.lang.IFn
+  (invoke [this db]
+    (query db stmt))
+  (invoke [this db a1]
+    (query db stmt a1))
+  (invoke [this db a1 a2]
+    (query db stmt a1 a2))
+  (invoke [this db a1 a2 a3]
+    (query db stmt a1 a2 a3))
+  (invoke [this db a1 a2 a3 a4]
+    (query db stmt a1 a2 a3 a4))
+  (invoke [this db a1 a2 a3 a4 a5]
+    (query db stmt a1 a2 a3 a4 a5))
+  (invoke [this db a1 a2 a3 a4 a5 a6]
+    (query db stmt a1 a2 a3 a4 a5 a6))
+  (invoke [this db a1 a2 a3 a4 a5 a6 a7]
+    (query db stmt a1 a2 a3 a4 a5 a6 a7))
+  (invoke [this db a1 a2 a3 a4 a5 a6 a7 a8]
+    (query db stmt a1 a2 a3 a4 a5 a6 a7 a8))
+  (invoke [this db a1 a2 a3 a4 a5 a6 a7 a8 a9]
+    (throw (ex-info "I'M LAZY! need more args" {}))))
+
+(defmacro defquery [name sql & kv]
+  (let [sql (-> sql (str/replace #"\s+" " ") (.trim))]
+    `(def ~name (->DefQuery (array-map :sql ~sql ~@kv)))))
