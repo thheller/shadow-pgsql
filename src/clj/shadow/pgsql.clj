@@ -125,16 +125,25 @@
   "{:sql \"SELECT * FROM something\"
     :result (sql/result->map :id)}
 
-   will return {id1 row1, id2 row2, ...}"
-  [key-fn]
-  (reify
-    ResultBuilder
-    (init [_]
-      (transient {}))
-    (add [_ state row]
-      (assoc! state (key-fn row) row))
-    (complete [_ state]
-      (persistent! state))))
+   will return {id1 row1, id2 row2, ...}
+
+   {:sql \"SELECT key, value FROM something\"
+    :result (sql/result->map :key :value)}
+
+   returns {key1 value1, key2, value2, ...}"
+  ([key-fn]
+    (result->map key-fn identity))
+  ([key-fn value-fn]
+    (result->map key-fn value-fn {}))
+  ([key-fn value-fn init]
+   (reify
+     ResultBuilder
+     (init [_]
+       (transient init))
+     (add [_ state row]
+       (assoc! state (key-fn row) (value-fn row)))
+     (complete [_ state]
+       (persistent! state)))))
 
 (defn row->map-transform
   "returns row as map after calling (transform-fn map)"
@@ -269,8 +278,26 @@
 (def int4-vec-type
   (vec-type Types/INT4 false))
 
+(def int-vec-type
+  (vec-type Types/INT4 false))
+
+(def int-set-type
+  (set-type Types/INT4 false))
+
+(def int4-set-type
+  (set-type Types/INT4 false))
+
 (def int8-vec-type
   (vec-type Types/INT8 false))
+
+(def long-vec-type
+  (vec-type Types/INT8 false))
+
+(def int8-set-type
+  (set-type Types/INT8 false))
+
+(def long-set-type
+  (set-type Types/INT8 false))
 
 (def numeric-vec-type
   (vec-type Types/NUMERIC))
@@ -569,8 +596,9 @@
                            (-> (.execute con stmt params)
                                (.getRowsAffected))))))
 
-(defn update
-  "(sql/update db :table {:column value, ...} \"id = $1\" id)"
+(defn update!
+  "(sql/update! db :table {:column value, ...} \"id = $1\" id)
+   this is also potentially dangerous since all columns are updated"
   [{:keys [table-naming column-naming] :as db} table data where & params]
   (let [offset (count params)
         sql (str "UPDATE "

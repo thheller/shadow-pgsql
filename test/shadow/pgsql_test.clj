@@ -97,7 +97,8 @@
         (is (= 2 (:t-int2 m)))
         (is (pos? (:id m))))
 
-      (sql/update db :types {:t-int2 3} "id = $1" id)
+      (sql/update! db :types {:t-int2 3} "id = $1" id)
 
       (let [val (sql/query db ?update-add-one id)]
         (is (= 4 val))))))
+

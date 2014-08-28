@@ -18,6 +18,12 @@ public class Bool implements TypeHandler {
         return 16;
     }
 
+
+    @Override
+    public String getTypeName() {
+        return "bool";
+    }
+
     @Override
     public boolean supportsBinary() {
         return true;

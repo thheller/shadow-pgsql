@@ -153,6 +153,11 @@ public class ProtocolOutput {
         nullTerminate();
     }
 
+    public void byteaWithLength(byte[] b) {
+        int32(b.length);
+        write(b);
+    }
+
     public void bytea(byte[] b) {
         write(b);
     }

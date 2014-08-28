@@ -23,6 +23,11 @@ public class Numeric implements TypeHandler {
     }
 
     @Override
+    public String getTypeName() {
+        return "numeric";
+    }
+
+    @Override
     public boolean supportsBinary() {
         return false; // need to figure out encoding first
     }

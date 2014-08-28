@@ -12,16 +12,23 @@ import java.time.temporal.TemporalAccessor;
  */
 public abstract class AbstractDateTime implements TypeHandler {
     private final int oid;
+    private final String name;
     private final DateTimeFormatter format;
 
-    protected AbstractDateTime(int oid, DateTimeFormatter format) {
+    protected AbstractDateTime(int oid, String name, DateTimeFormatter format) {
         this.oid = oid;
+        this.name = name;
         this.format = format;
     }
 
     @Override
     public int getTypeOid() {
         return oid;
+    }
+
+    @Override
+    public String getTypeName() {
+        return name;
     }
 
     @Override

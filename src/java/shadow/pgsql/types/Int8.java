@@ -13,14 +13,21 @@ import java.nio.ByteBuffer;
  */
 public class Int8 implements TypeHandler {
     private final int oid;
+    private final String name;
 
-    public Int8(int oid) {
+    public Int8(int oid, String name) {
         this.oid = oid;
+        this.name = name;
     }
 
     @Override
     public int getTypeOid() {
         return oid;
+    }
+
+    @Override
+    public String getTypeName() {
+        return name;
     }
 
     @Override

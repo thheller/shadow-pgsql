@@ -435,7 +435,11 @@ public class Connection implements AutoCloseable {
                 if (t == null) {
                     output.int32(0);
                 } else {
-                    output.int32(t.getTypeOid());
+                    int oid = t.getTypeOid();
+                    if (oid == -1) {
+                        oid = db.getOidForName(t.getTypeName());
+                    }
+                    output.int32(oid);
                 }
             }
             output.complete();

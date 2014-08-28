@@ -29,25 +29,33 @@ import java.util.Map;
 // FIXME: maybe extract interface?
 public class TypeRegistry {
     private final Map<Integer, TypeHandler> typeHandlers;
+    private final Map<String, TypeHandler> namedTypeHandlers;
     private final Map<ColumnByName, TypeHandler> customHandlers;
 
     public static final TypeRegistry DEFAULT = createDefault();
 
     public static class Builder {
         private final Map<Integer, TypeHandler> typeHandlers;
+        private final Map<String, TypeHandler> namedTypeHandlers;
         private final Map<ColumnByName, TypeHandler> customHandlers;
 
         Builder() {
-            this(new HashMap<>(), new HashMap<>());
+            this(new HashMap<>(), new HashMap<>(), new HashMap<>());
         }
 
-        Builder(Map<Integer, TypeHandler> typeHandlers, Map<ColumnByName, TypeHandler> customHandlers) {
+        public Builder(Map<Integer, TypeHandler> typeHandlers, Map<String, TypeHandler> namedTypeHandlers, Map<ColumnByName, TypeHandler> customHandlers) {
             this.typeHandlers = typeHandlers;
+            this.namedTypeHandlers = namedTypeHandlers;
             this.customHandlers = customHandlers;
         }
 
         public Builder registerTypeHandler(TypeHandler handler) {
-            this.typeHandlers.put(handler.getTypeOid(), handler);
+            if (handler.getTypeOid() == -1) {
+                this.namedTypeHandlers.put(handler.getTypeName(), handler);
+            } else {
+                this.typeHandlers.put(handler.getTypeOid(), handler);
+            }
+
             return this;
         }
 
@@ -57,7 +65,7 @@ public class TypeRegistry {
         }
 
         public TypeRegistry build() {
-            return new TypeRegistry(typeHandlers, customHandlers);
+            return new TypeRegistry(typeHandlers, namedTypeHandlers, customHandlers);
         }
     }
 
@@ -85,7 +93,8 @@ public class TypeRegistry {
                 Types.TIMESTAMPTZ,
                 Types.DATE,
                 Types.BYTEA,
-                Types.BOOL
+                Types.BOOL,
+                Types.HSTORE
         };
 
         for (TypeHandler t : defaults) {
@@ -95,8 +104,9 @@ public class TypeRegistry {
         return b.build();
     }
 
-    TypeRegistry(Map<Integer, TypeHandler> typeHandlers, Map<ColumnByName, TypeHandler> customHandlers) {
+    public TypeRegistry(Map<Integer, TypeHandler> typeHandlers, Map<String, TypeHandler> namedTypeHandlers, Map<ColumnByName, TypeHandler> customHandlers) {
         this.typeHandlers = Collections.unmodifiableMap(typeHandlers);
+        this.namedTypeHandlers = Collections.unmodifiableMap(namedTypeHandlers);
         this.customHandlers = Collections.unmodifiableMap(customHandlers);
     }
 
@@ -106,18 +116,26 @@ public class TypeRegistry {
 
     public Builder copy() {
         Map<Integer, TypeHandler> types = new HashMap<>();
+        Map<String, TypeHandler> namedTypes = new HashMap<>();
         Map<ColumnByName, TypeHandler> handlers = new HashMap<>();
 
         types.putAll(this.typeHandlers);
+        namedTypes.putAll(this.namedTypeHandlers);
         handlers.putAll(this.customHandlers);
 
-        return new Builder(types, handlers);
+        return new Builder(types, namedTypes, handlers);
     }
 
     public TypeHandler getTypeHandlerForOid(Database pg, int typeOid) {
-        final TypeHandler handler = typeHandlers.get(typeOid);
+        TypeHandler handler = typeHandlers.get(typeOid);
         if (handler == null) {
-            throw new IllegalArgumentException(String.format("unsupported type: %d (%s)", typeOid, pg.getNameForOid(typeOid)));
+            final String name = pg.getNameForOid(typeOid);
+
+            handler = namedTypeHandlers.get(name);
+
+            if (handler == null) {
+                throw new IllegalArgumentException(String.format("unsupported type: %d (%s)", typeOid, name));
+            }
         }
         return handler;
     }

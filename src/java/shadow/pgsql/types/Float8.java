@@ -19,6 +19,11 @@ public class Float8 implements TypeHandler {
     }
 
     @Override
+    public String getTypeName() {
+        return "float8";
+    }
+
+    @Override
     public boolean supportsBinary() {
         return true;
     }

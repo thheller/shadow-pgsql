@@ -14,8 +14,8 @@ import java.time.format.DateTimeFormatter;
  */
 public abstract class Timestamp extends AbstractDateTime {
 
-    protected Timestamp(int oid, DateTimeFormatter format) {
-        super(oid, format);
+    protected Timestamp(int oid, String name, DateTimeFormatter format) {
+        super(oid, name, format);
     }
 
     @Override

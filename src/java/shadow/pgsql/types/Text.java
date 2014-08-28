@@ -34,24 +34,31 @@ public class Text implements TypeHandler {
     };
 
     private final int oid;
+    private final String name;
     private final Conversion conversion;
 
-    public Text(int oid) {
-        this(oid, AS_IS);
+    public Text(int oid, String name) {
+        this(oid, name, AS_IS);
     }
 
-    public Text(int oid, Conversion conversion) {
+    public Text(int oid, String name, Conversion conversion) {
         this.oid = oid;
+        this.name = name;
         this.conversion = conversion;
     }
 
     public Text(Conversion conversion) {
-        this(25, conversion); // 25 = text (default type)
+        this(25, "text", conversion); // 25 = text (default type)
     }
 
     @Override
     public int getTypeOid() {
         return oid;
+    }
+
+    @Override
+    public String getTypeName() {
+        return name;
     }
 
     @Override

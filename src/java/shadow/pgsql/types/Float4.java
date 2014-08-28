@@ -19,6 +19,11 @@ public class Float4 implements TypeHandler {
     }
 
     @Override
+    public String getTypeName() {
+        return "float4";
+    }
+
+    @Override
     public boolean supportsBinary() {
         return true;
     }

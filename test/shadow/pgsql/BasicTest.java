@@ -7,9 +7,7 @@ import org.junit.Test;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.*;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
 import static org.junit.Assert.*;
 
@@ -26,6 +24,7 @@ public class BasicTest {
                 .setUser("zilence")
                 .setDatabase("shadow_pgsql")
                 .get();
+
         this.pg = db.connect();
 
         pg.executeWith("DELETE FROM types");
@@ -338,6 +337,26 @@ public class BasicTest {
             });
             fail("should have complained");
         } catch (IllegalStateException e) {
+        }
+    }
+
+    @Test
+    public void testHStore() throws Exception {
+
+        Map<String, String> map = new HashMap<>();
+        map.put("a", "1");
+        map.put("b", "2");
+        map.put("c", null);
+
+        try (PreparedQuery pq = roundtripQuery("types", "t_hstore")) {
+            Map<String, String> result = (Map<String, String>) pq.executeWith(map);
+
+            assertTrue(result.containsKey("a"));
+            assertTrue(result.containsKey("b"));
+            assertTrue(result.containsKey("c"));
+            assertEquals("1", result.get("a"));
+            assertEquals("2", result.get("b"));
+            assertNull(result.get("c"));
         }
     }
 

@@ -17,14 +17,13 @@ import java.time.temporal.TemporalAccessor;
 public class Date extends AbstractDateTime {
 
     public Date() {
-        super(1082, DateTimeFormatter.ISO_DATE);
+        super(1082, "date", DateTimeFormatter.ISO_DATE);
     }
 
     @Override
     public boolean supportsBinary() {
         return true;
     }
-
 
     public static final LocalDate PG_DATE_BASE = LocalDate.of(2000, 1, 1);
 

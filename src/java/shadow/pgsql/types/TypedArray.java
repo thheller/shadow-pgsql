@@ -97,6 +97,11 @@ public class TypedArray implements TypeHandler {
     }
 
     @Override
+    public String getTypeName() {
+        return "_" + itemType.getTypeName();
+    }
+
+    @Override
     public void encodeBinary(Connection con, ProtocolOutput output, Object param) {
         if (param instanceof Collection) {
             Collection coll = (Collection) param;

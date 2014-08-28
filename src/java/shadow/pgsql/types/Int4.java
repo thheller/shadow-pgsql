@@ -14,14 +14,21 @@ import java.nio.ByteBuffer;
 public class Int4 implements TypeHandler {
 
     private final int oid;
+    private final String name;
 
-    Int4(int oid) {
+    public Int4(int oid, String name) {
         this.oid = oid;
+        this.name = name;
     }
 
     @Override
     public int getTypeOid() {
         return oid;
+    }
+
+    @Override
+    public String getTypeName() {
+        return name;
     }
 
     @Override

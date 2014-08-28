@@ -20,6 +20,7 @@ import java.util.Map;
  */
 public class Database {
     private final Map<Integer, String> oid2name = new HashMap<>();
+    private final Map<String, Integer> name2oid = new HashMap<>();
 
     private final Map<ColumnByTableIndex, String> columnNames = new HashMap<>();
 
@@ -89,6 +90,7 @@ public class Database {
                             int oid = (int) row.get(0);
                             String name = (String) row.get(1);
                             oid2name.put(oid, name);
+                            name2oid.put(name, oid);
                         }
                     });
 
@@ -140,6 +142,15 @@ public class Database {
 
     public String getNameForOid(int oid) {
         return this.oid2name.get(oid);
+    }
+
+    public int getOidForName(String typeName) {
+        Integer i = this.name2oid.get(typeName);
+        if (i == null) {
+            throw new IllegalArgumentException(String.format("unknown type: %2", typeName));
+        }
+
+        return i;
     }
 
     private static class ColumnByTableIndex {

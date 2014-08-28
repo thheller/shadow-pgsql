@@ -19,6 +19,11 @@ public class ByteA implements TypeHandler {
     }
 
     @Override
+    public String getTypeName() {
+        return "bytea";
+    }
+
+    @Override
     public boolean supportsBinary() {
         return true;
     }
