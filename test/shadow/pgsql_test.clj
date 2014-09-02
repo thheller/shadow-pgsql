@@ -102,3 +102,22 @@
       (let [val (sql/query db ?update-add-one id)]
         (is (= 4 val))))))
 
+(deftest test-hstore-strings
+  (with-open [db (test-db)]
+    (let [input {"hello" "world"}
+          result (sql/insert-one! db :types {:t-hstore input} :t-hstore)]
+      (is (= input result))
+      (is (thrown? java.lang.IllegalArgumentException (sql/insert-one! db :types {:t-hstore {"invalid" :value}})))
+      (is (thrown? java.lang.IllegalArgumentException (sql/insert-one! db :types {:t-hstore {:invalid "key"}})))
+      )))
+
+(deftest test-hstore-keywords
+  (with-open [db (-> (test-db)
+                     (sql/with-default-types sql/hstore-keyword-type))]
+    (let [input {:hello "world"}
+          result (sql/insert-one! db :types {:t-hstore input} :t-hstore)]
+      (is (= input result))
+      (is (thrown? java.lang.IllegalArgumentException (sql/insert-one! db :types {:t-hstore {"invalid" "key"}})))
+      (is (thrown? java.lang.IllegalArgumentException (sql/insert-one! db :types {:t-hstore {:invalid :value}})))
+      )))
+

@@ -17,7 +17,7 @@
             TypedArray
             ArrayReader
             Text
-            Text$Conversion Types])
+            Text$Conversion Types HStore$Handler HStore])
 
   (:require [clojure.string :as str]
             [clojure.edn :as edn]
@@ -312,6 +312,43 @@
 
 (def timestamptz-type
   Types/TIMESTAMPTZ)
+
+(def hstore-string-type
+  (HStore.
+    (reify HStore$Handler
+      (keyToString [_ key]
+        (when-not (string? key)
+          (throw (ex-info "not a valid key, must be a string" {:key key})))
+        key)
+      (valueToString [_ val]
+        (when-not (string? val)
+          (throw (ex-info "not a valid value, must be a string" {:value val})))
+        val)
+      (init [_ size]
+        (transient {}))
+      (add [_ m key value]
+        (assoc! m key value))
+      (complete [_ m]
+        (persistent! m)))))
+
+(def hstore-keyword-type
+  (HStore.
+    (reify HStore$Handler
+      (keyToString [_ key]
+        (when-not (and (keyword? key)
+                       (nil? (namespace key)))
+          (throw (ex-info "not a valid key, must be a keyword without namespace" {:key key})))
+        (name key))
+      (valueToString [_ val]
+        (when-not (string? val)
+          (throw (ex-info "not a valid value, must be a string" {:value val})))
+        val)
+      (init [_ size]
+        (transient {}))
+      (add [_ m key value]
+        (assoc! m (keyword key) value))
+      (complete [_ m]
+        (persistent! m)))))
 
 (deftype ClojureStatement [db sql params types]
   Statement
@@ -672,7 +709,9 @@
                             int4-vec-type
                             int8-vec-type
                             text-vec-type
-                            numeric-vec-type))))
+                            numeric-vec-type
+                            ;; maybe hstore with keywords is a better default?
+                            hstore-string-type))))
 
 (defn stop [db]
   (.close ^java.lang.AutoCloseable db))
