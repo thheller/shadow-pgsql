@@ -57,7 +57,7 @@ public abstract class PreparedBase implements AutoCloseable {
                     }
                 }
             } catch (Exception e) {
-                throw new IllegalArgumentException(String.format("SQL:[%s] Failed to encode parameter $%d [%s]", getSQLString(), i + 1, param), e);
+                throw new IllegalArgumentException(String.format("Failed to encode parameter $%d [%s]\nSQL: %s", i + 1, param, getSQLString()), e);
             }
         }
 
@@ -79,27 +79,6 @@ public abstract class PreparedBase implements AutoCloseable {
     protected void writeSync() {
         // Sync
         pg.output.simpleCommand('S');
-    }
-
-    protected void doSync() throws IOException {
-        writeSync();
-
-        pg.output.flushAndReset();
-
-        READY_LOOP:
-        while (true) {
-            final char type = pg.input.readNextCommand();
-            switch (type) {
-                case 'Z':  // ReadyForQuery
-                {
-                    pg.input.readReadyForQuery();
-                    break READY_LOOP;
-                }
-                default: {
-                    throw new IllegalStateException(String.format("invalid protocol action while syncing: '%s'", type));
-                }
-            }
-        }
     }
 
     protected void executeWithParams(TypeHandler[] typeDecoders, List queryParams) throws IOException {

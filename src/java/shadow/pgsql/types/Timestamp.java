@@ -53,6 +53,8 @@ public abstract class Timestamp extends AbstractDateTime {
                     .atZone(ZoneId.systemDefault())
                     .withZoneSameInstant(ZoneOffset.UTC)
                     .toInstant();
+        } else if (param instanceof LocalDate) {
+            i = ((LocalDate) param).atStartOfDay().toInstant(ZoneOffset.UTC);
         } else if (param instanceof Instant) {
             i = (Instant) param;
         } else {

@@ -81,6 +81,10 @@ public class TypedArray implements TypeHandler {
                 return 1015;
             case Types.OID_NUMERIC:
                 return 1231;
+            case Types.OID_TIMESTAMP:
+                return 1115;
+            case Types.OID_TIMESTAMPTZ:
+                return 1185;
             default:
                 throw new IllegalArgumentException(String.format("don't know array oid for type: [%d,%s]", type.getTypeOid(), type.getClass().getName()));
         }
@@ -178,13 +182,19 @@ public class TypedArray implements TypeHandler {
         int[] dimensionSizes = new int[dimensions];
         int[] dimensionBounds = new int[dimensions];
 
+
         for (int i = 0; i < dimensions; i++) {
             int dimensionSize = dimensionSizes[i] = buf.getInt();
             dimensionBounds[i] = buf.getInt();
             itemCount += dimensionSize;
         }
 
-        if (dimensions == 1) {
+
+        if (dimensions == 0) {
+            return arrayReader.complete(arrayReader.init(0));
+        } else if (dimensions != 1) {
+            throw new UnsupportedOperationException("FIXME: implement 2-dim array");
+        } else {
             Object result = arrayReader.init(dimensionSizes[0]);
             for (int i = 0; i < itemCount; i++) {
                 final int itemSize = buf.getInt();
@@ -196,8 +206,6 @@ public class TypedArray implements TypeHandler {
             }
 
             return arrayReader.complete(result);
-        } else {
-            throw new UnsupportedOperationException("FIXME: implement 2-dim array");
         }
     }
 

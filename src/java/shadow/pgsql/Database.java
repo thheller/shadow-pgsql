@@ -19,7 +19,7 @@ import java.util.Map;
  * @author Thomas Heller
  */
 public class Database {
-    private final Map<Integer, String> oid2name = new HashMap<>();
+    final Map<Integer, String> oid2name = new HashMap<>();
     private final Map<String, Integer> name2oid = new HashMap<>();
 
     private final Map<ColumnByTableIndex, String> columnNames = new HashMap<>();
@@ -94,7 +94,7 @@ public class Database {
                         }
                     });
 
-            int results = (int) con.executeQueryWith(pg_types);
+            int results = (int) con.queryWith(pg_types);
 
             if (results == 0) {
                 throw new IllegalStateException("no types?");
@@ -132,7 +132,7 @@ public class Database {
                         }
                     });
 
-            con.executeQueryWith(schema);
+            con.queryWith(schema);
         }
     }
 

@@ -300,7 +300,7 @@
   (set-type Types/INT8 false))
 
 (def numeric-vec-type
-  (vec-type Types/NUMERIC))
+  (vec-type Types/NUMERIC false))
 
 (def text-type Types/TEXT)
 
@@ -310,8 +310,14 @@
 (def timestamp-type
   Types/TIMESTAMP)
 
+(def timestamp-vec-type
+  (vec-type timestamp-type))
+
 (def timestamptz-type
   Types/TIMESTAMPTZ)
+
+(def timestamptz-vec-type
+  (vec-type timestamptz-type))
 
 (def hstore-string-type
   (HStore.
@@ -465,7 +471,7 @@
         params (into [] params)]
 
     (-with-connection db (fn [^Connection con]
-                           (.executeQuery con query params)))))
+                           (.query con query params)))))
 
 (defn insert
   [db
@@ -636,20 +642,32 @@
 (defn update!
   "(sql/update! db :table {:column value, ...} \"id = $1\" id)
    this is also potentially dangerous since all columns are updated"
-  [{:keys [table-naming column-naming] :as db} table data where & params]
+  [{:keys [table-naming column-naming ^TypeRegistry types] :as db} table data where & params]
   (let [offset (count params)
+        table-name (to-sql-name table-naming table)
+
+        column-names (->> (keys data)
+                          (map #(to-sql-name column-naming %)))
+
         sql (str "UPDATE "
-                 (-> (to-sql-name table-naming table) quoted)
+                 (quoted table-name)
                  " SET "
-                 (->> (keys data)
-                      (map #(to-sql-name column-naming %))
+                 (->> column-names
                       (map quoted)
                       (map-indexed (fn [idx col-name]
                                      (str col-name " = $" (+ idx offset 1))))
-                      (str/join ","))
+                      (str/join ", "))
                  " WHERE "
                  where)]
-    (apply execute db sql (concat params (vals data)))))
+    (apply execute
+           db
+           {:sql sql
+            ;; type hints for the columns since we know table/column
+            ;; nil for remainder since we only know expected oid
+            :params (->> column-names
+                         (map #(.getTypeHandlerForColumn types table-name %))
+                         (concat (repeat (count params) nil)))}
+           (concat params (vals data)))))
 
 (defn build-types
   ([type-map table-naming column-naming]
@@ -710,6 +728,8 @@
                             int8-vec-type
                             text-vec-type
                             numeric-vec-type
+                            timestamp-vec-type
+                            timestamptz-vec-type
                             ;; maybe hstore with keywords is a better default?
                             hstore-string-type))))
 

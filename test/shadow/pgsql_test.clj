@@ -120,4 +120,3 @@
       (is (thrown? java.lang.IllegalArgumentException (sql/insert-one! db :types {:t-hstore {"invalid" "key"}})))
       (is (thrown? java.lang.IllegalArgumentException (sql/insert-one! db :types {:t-hstore {:invalid :value}})))
       )))
-

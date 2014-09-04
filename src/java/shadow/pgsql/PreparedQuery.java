@@ -74,23 +74,31 @@ public class PreparedQuery extends PreparedBase {
 
                         Object value = null;
 
-                        if (colSize != -1) {
-                            if (decoder.supportsBinary()) {
-                                int mark = pg.input.current.position();
+                        try {
+                            if (colSize != -1) {
+                                if (decoder.supportsBinary()) {
+                                    int mark = pg.input.current.position();
 
-                                value = decoder.decodeBinary(pg, field, pg.input.current, colSize);
+                                    value = decoder.decodeBinary(pg, field, pg.input.current, colSize);
 
-                                if (pg.input.current.position() != mark + colSize) {
-                                    throw new IllegalStateException(String.format("Field:[%s ,%s] did not consume all bytes", field.name, decoder));
+                                    if (pg.input.current.position() != mark + colSize) {
+                                        throw new IllegalStateException(String.format("Field:[%s ,%s] did not consume all bytes", field.name, decoder));
+                                    }
+                                } else {
+                                    byte[] bytes = new byte[colSize];
+                                    pg.input.getBytes(bytes);
+
+                                    // FIXME: assumes UTF-8
+                                    final String stringValue = new String(bytes);
+                                    value = decoder.decodeString(pg, field, stringValue);
                                 }
-                            } else {
-                                byte[] bytes = new byte[colSize];
-                                pg.input.getBytes(bytes);
-
-                                // FIXME: assumes UTF-8
-                                final String stringValue = new String(bytes);
-                                value = decoder.decodeString(pg, field, stringValue);
                             }
+                        } catch (Exception e) {
+                            throw new IllegalStateException(
+                                    String.format("Failed parsing field \"%s\" of table \"%s\"",
+                                            field.name,
+                                            field.tableOid > 0 ? pg.db.oid2name.get(field.tableOid) : "--unknown--"
+                                    ), e);
                         }
 
                         row = rowBuilder.add(row, field, i, value);
@@ -122,7 +130,7 @@ public class PreparedQuery extends PreparedBase {
         }
 
         if (errorData != null) {
-            throw new CommandException(String.format("Failed to execute Query: %s", query.getSQLString()), errorData);
+            throw new CommandException(String.format("Failed to execute Query\nSQL: %s\n", query.getSQLString()), errorData);
         }
 
         if (!complete) {

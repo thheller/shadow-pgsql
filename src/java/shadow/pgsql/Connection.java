@@ -19,7 +19,7 @@ public class Connection implements AutoCloseable {
 
     int openStatements = 0;
 
-    private final Database db;
+    final Database db;
     private final IO io;
 
     public ProtocolOutput output;
@@ -45,12 +45,12 @@ public class Connection implements AutoCloseable {
         return this.parameters.get(key);
     }
 
-    public void handleNotice(Map<String, String> notice) {
+    void handleNotice(Map<String, String> notice) {
         // FIXME: delegate to database or some interface
         System.out.format("NOTICE: %s", notice.toString());
     }
 
-    public void handleNotify(int processId, String channel, String payload) {
+    void handleNotify(int processId, String channel, String payload) {
         // FIXME: delegate to database or some interface
         System.out.format("NOTIFY: %d %s -> %s", processId, channel, payload);
     }
@@ -192,15 +192,15 @@ public class Connection implements AutoCloseable {
         this.simpleStatement("ROLLBACK");
     }
 
-    public Object executeQueryWith(String query, Object... params) throws IOException {
-        return executeQuery(new SimpleQuery(query), Arrays.asList(params));
+    public Object queryWith(String query, Object... params) throws IOException {
+        return query(new SimpleQuery(query), Arrays.asList(params));
     }
 
-    public Object executeQueryWith(Query query, Object... params) throws IOException {
-        return executeQuery(query, Arrays.asList(params));
+    public Object queryWith(Query query, Object... params) throws IOException {
+        return query(query, Arrays.asList(params));
     }
 
-    public Object executeQuery(Query query, List<Object> params) throws IOException {
+    public Object query(Query query, List<Object> params) throws IOException {
         try (PreparedQuery stmt = prepareQuery(query)) {
             return stmt.execute(params);
         }
@@ -295,14 +295,7 @@ public class Connection implements AutoCloseable {
                 throw new CommandException(String.format("%s returns rows, use a Query", statement.getSQLString()));
             }
 
-            final TypeHandler[] encoders = new TypeHandler[paramInfo.length];
-            for (int i = 0; i < encoders.length; i++) {
-                if (typeHints.size() > i) {
-                    encoders[i] = typeHints.get(i);
-                } else {
-                    encoders[i] = statement.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
-                }
-            }
+            final TypeHandler[] encoders = getParamTypes(paramInfo, typeHints, statement.getTypeRegistry());
 
             return new PreparedStatement(this, statementId, encoders, statement);
         } catch (Exception e) {
@@ -310,6 +303,25 @@ public class Connection implements AutoCloseable {
             closeStatement(statementId);
             throw e;
         }
+    }
+
+    private TypeHandler[] getParamTypes(int[] paramInfo, List<TypeHandler> typeHints, TypeRegistry typeRegistry) {
+        final TypeHandler[] encoders = new TypeHandler[paramInfo.length];
+        for (int i = 0; i < encoders.length; i++) {
+            TypeHandler encoder = null;
+
+            if (typeHints.size() > i) {
+                encoder = typeHints.get(i);
+            }
+
+            if (encoder == null) {
+                encoder = typeRegistry.getTypeHandlerForOid(db, paramInfo[i]);
+            }
+
+            encoders[i] = encoder;
+        }
+
+        return encoders;
     }
 
     public PreparedQuery prepareQuery(Query query) throws IOException {
@@ -373,7 +385,7 @@ public class Connection implements AutoCloseable {
                 throw new IllegalStateException("Error but Parsed!");
             }
 
-            throw new CommandException(String.format("Failed to prepare Query: %s", query.getSQLString()), errorData);
+            throw new CommandException(String.format("Failed to prepare Query\nSQL: %s", query.getSQLString()), errorData);
         }
 
         try {
@@ -385,20 +397,7 @@ public class Connection implements AutoCloseable {
                 throw new IllegalStateException("backend did not send ParseComplete, ParameterDescription and RowDescription");
             }
 
-            final TypeHandler[] encoders = new TypeHandler[paramInfo.length];
-            for (int i = 0; i < encoders.length; i++) {
-                TypeHandler encoder = null;
-
-                if (typeHints.size() > i) {
-                    encoder = typeHints.get(i);
-                }
-
-                if (encoder == null) {
-                    encoder = query.getTypeRegistry().getTypeHandlerForOid(db, paramInfo[i]);
-                }
-
-                encoders[i] = encoder;
-            }
+            final TypeHandler[] encoders = getParamTypes(paramInfo, typeHints, query.getTypeRegistry());
 
             RowBuilder rowBuilder = query.createRowBuilder(columnInfos);
             ResultBuilder resultBuilder = query.createResultBuilder(columnInfos);
@@ -471,7 +470,7 @@ public class Connection implements AutoCloseable {
         io.close();
     }
 
-    public void closeStatement(String statementId) throws IOException {
+    void closeStatement(String statementId) throws IOException {
         output.checkReset();
 
         // Close

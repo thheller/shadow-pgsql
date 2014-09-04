@@ -97,6 +97,9 @@ public class Types {
     public static final Text VARCHAR = new Text(OID_VARCHAR, "varchar");
     public static final TypedArray VARCHAR_ARRAY = new TypedArray(VARCHAR, TypedArray.makeReader(String.class), true);
 
+    public static final TypedArray TIMESTAMP_ARRAY = new TypedArray(TIMESTAMP, TypedArray.makeReader(OffsetDateTime.class), true);
+    public static final TypedArray TIMESTAMPTZ_ARRAY = new TypedArray(TIMESTAMPTZ, TypedArray.makeReader(OffsetDateTime.class), true);
+
 
     public static final ByteA BYTEA = new ByteA();
 

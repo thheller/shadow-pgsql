@@ -55,7 +55,7 @@ public class BasicTest {
         SimpleQuery query = new SimpleQuery("SELECT fint8 FROM num_types");
         query.setRowBuilder(Helpers.ONE_COLUMN);
 
-        List numTypes = (List) pg.executeQueryWith(query);
+        List numTypes = (List) pg.queryWith(query);
         assertTrue(numTypes.contains(1l));
         assertFalse(numTypes.contains(2l));
         assertTrue(numTypes.contains(3l));
@@ -64,7 +64,7 @@ public class BasicTest {
     @Test
     public void testBasicError() throws IOException {
         try {
-            pg.executeQueryWith("SELECT * FROM unknown_table");
+            pg.queryWith("SELECT * FROM unknown_table");
 
             fail("Table doesn't exist");
         } catch (CommandException e) {
@@ -150,7 +150,7 @@ public class BasicTest {
 
     @Test
     public void testNumeric() throws IOException {
-        // Object result = pg.executeQueryWith("SELECT fnumeric FROM num_types ORDER BY fnumeric");
+        // Object result = pg.queryWith("SELECT fnumeric FROM num_types ORDER BY fnumeric");
 
         try (PreparedQuery pq = roundtripQuery("num_types", "fnumeric")) {
             roundtrip(pq, new BigDecimal("0.123456789"));
@@ -244,7 +244,7 @@ public class BasicTest {
 
     @Test
     public void testNumericArray() throws IOException {
-        Object result = pg.executeQueryWith("SELECT anumeric FROM array_types");
+        Object result = pg.queryWith("SELECT anumeric FROM array_types");
 
         try (PreparedQuery pq = roundtripQuery("array_types", "anumeric")) {
             BigDecimal[] send = new BigDecimal[]{
@@ -306,7 +306,7 @@ public class BasicTest {
 
         @Override
         public Object withConnection(Connection con) throws Exception {
-            return con.executeQueryWith("SELECT * FROM types WHERE id = $1", id);
+            return con.queryWith("SELECT * FROM types WHERE id = $1", id);
         }
     }
 
@@ -314,7 +314,7 @@ public class BasicTest {
     public void testPool() throws Exception {
         DatabasePool pool = new DatabasePool(db);
         final int id = 1;
-        Object r1 = pool.withConnection(con -> con.executeQueryWith("SELECT * FROM types WHERE id = $1", id));
+        Object r1 = pool.withConnection(con -> con.queryWith("SELECT * FROM types WHERE id = $1", id));
         Object r2 = pool.withConnection(new GetById(id));
         // FIXME: you call this a test?
     }
@@ -359,5 +359,4 @@ public class BasicTest {
             assertNull(result.get("c"));
         }
     }
-
 }
