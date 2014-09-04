@@ -7,6 +7,7 @@ import shadow.pgsql.TypeHandler;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.nio.ByteBuffer;
 
 /**
@@ -66,6 +67,8 @@ public class Numeric implements TypeHandler {
     public String encodeToString(Connection con, Object param) {
         if (param instanceof BigDecimal) {
             return ((BigDecimal) param).toPlainString();
+        } else if (param instanceof BigInteger) {
+            return param.toString();
         } else if (param instanceof Double) {
             return BigDecimal.valueOf((Double)param).toPlainString();
         } else if (param instanceof Float) {
