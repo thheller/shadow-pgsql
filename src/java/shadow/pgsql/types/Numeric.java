@@ -64,7 +64,19 @@ public class Numeric implements TypeHandler {
 
     @Override
     public String encodeToString(Connection con, Object param) {
-        return ((BigDecimal) param).toPlainString();
+        if (param instanceof BigDecimal) {
+            return ((BigDecimal) param).toPlainString();
+        } else if (param instanceof Double) {
+            return BigDecimal.valueOf((Double)param).toPlainString();
+        } else if (param instanceof Float) {
+            return BigDecimal.valueOf((Float)param).toPlainString();
+        } else if (param instanceof Long) {
+            return BigDecimal.valueOf((Long) param).toPlainString();
+        } else if (param instanceof Integer) {
+            return BigDecimal.valueOf((Integer) param).toPlainString();
+        } else {
+            throw new IllegalArgumentException(String.format("invalid BigDecimal type: %s [%s]", param.getClass().getName(), param));
+        }
     }
 
     @Override
