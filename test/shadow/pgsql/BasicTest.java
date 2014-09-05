@@ -297,6 +297,14 @@ public class BasicTest {
         }
     }
 
+    @Test
+    public void testUUID() throws IOException {
+        try (PreparedQuery pq = roundtripQuery("types", "t_uuid")) {
+            UUID uuid = UUID.randomUUID();
+            assertEquals(uuid, pq.executeWith(uuid));
+        }
+    }
+
     public static class GetById implements DatabaseTask<Object> {
         private final int id;
 

@@ -108,4 +108,6 @@ public class Types {
     public static final Float8 FLOAT8 = new Float8();
 
     public static final HStore HSTORE = new HStore();
+
+    public static final PgUUID UUID = new PgUUID();
 }

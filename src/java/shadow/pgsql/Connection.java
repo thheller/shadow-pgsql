@@ -282,7 +282,7 @@ public class Connection implements AutoCloseable {
             if (parsed) {
                 throw new IllegalStateException("Error but Parsed!");
             }
-            throw new CommandException(String.format("Failed to prepare Statement: %s", statement.getSQLString()), errorData);
+            throw new CommandException(String.format("Failed to prepare Statement\nSQL: %s", statement.getSQLString()), errorData);
         }
 
         try {

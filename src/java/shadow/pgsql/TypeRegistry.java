@@ -96,7 +96,8 @@ public class TypeRegistry {
                 Types.DATE,
                 Types.BYTEA,
                 Types.BOOL,
-                Types.HSTORE
+                Types.HSTORE,
+                Types.UUID
         };
 
         for (TypeHandler t : defaults) {
