@@ -34,6 +34,10 @@ public class Float4 implements TypeHandler {
             output.float4((Float) param);
         } else if (param instanceof Double) {
             output.float4(((Double) param).floatValue());
+        } else if  (param instanceof Long) {
+            output.float4(((Long)param).floatValue());
+        } else if  (param instanceof Integer) {
+            output.float4(((Integer)param).floatValue());
         } else {
             throw new IllegalArgumentException(String.format("not a float4: %s", param.getClass().getName()));
         }

@@ -34,6 +34,10 @@ public class Float8 implements TypeHandler {
             output.float8(((Double) param));
         } else if (param instanceof Float) {
             output.float8(((Float) param).doubleValue());
+        } else if  (param instanceof Long) {
+            output.float8(((Long)param).doubleValue());
+        } else if  (param instanceof Integer) {
+            output.float8(((Integer)param).doubleValue());
         } else {
             throw new IllegalArgumentException(String.format("not a float8: %s", param.getClass().getName()));
         }
