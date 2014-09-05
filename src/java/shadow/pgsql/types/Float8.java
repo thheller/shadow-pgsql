@@ -30,14 +30,8 @@ public class Float8 implements TypeHandler {
 
     @Override
     public void encodeBinary(Connection con, ProtocolOutput output, Object param) {
-        if (param instanceof Double) {
-            output.float8(((Double) param));
-        } else if (param instanceof Float) {
-            output.float8(((Float) param).doubleValue());
-        } else if  (param instanceof Long) {
-            output.float8(((Long)param).doubleValue());
-        } else if  (param instanceof Integer) {
-            output.float8(((Integer)param).doubleValue());
+        if (param instanceof Number) {
+            output.float8(((Number)param).doubleValue());
         } else {
             throw new IllegalArgumentException(String.format("not a float8: %s", param.getClass().getName()));
         }
