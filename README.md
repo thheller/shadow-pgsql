@@ -1,6 +1,12 @@
 # shadow-pgsql
 
-WARNING: Alpha-Level Software. DO NOT USE YET! I don't.
+WARNING: Beta-Level Software, use at your own risk. I'm using it in production for a while now and successfully executed a couple million queries.
+
+```
+[thheller/shadow-pgsql "0.5.0"]
+```
+
+I need to write some docs ...
 
 ## A PostgreSQL Client for the JVM.
 
@@ -18,7 +24,6 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 
 - Fully customizable Types via simple [Interface](https://github.com/thheller/shadow-pgsql/blob/master/src/java/shadow/pgsql/TypeHandler.java)
 - Binary Format when supported by Type
-- Stuff?
 
 ### Status
 
@@ -33,7 +38,6 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 - Tests
 - better Errors (Messages)
 - Docs
-- SSL (disabled until I figure out how to combine it with java.nio)
 - Auth Support (MD5, ...)
 - Generics (didn't write any serious Java for over 10 years, need to learn Generics first)
 - check Performance (should be faster than JDBC, but needs check to be sure)

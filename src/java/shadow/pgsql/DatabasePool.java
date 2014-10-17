@@ -60,7 +60,7 @@ public class DatabasePool extends GenericObjectPool<Connection> {
     }
 
     public void setDefaultOpts() {
-        this.setMinIdle(0);
+        this.setMinIdle(3);
         this.setMaxIdle(25);
         this.setMaxTotal(25);
         this.setMaxWaitMillis(1000);

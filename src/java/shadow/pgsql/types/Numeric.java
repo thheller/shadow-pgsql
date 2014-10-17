@@ -74,9 +74,9 @@ public class Numeric implements TypeHandler {
         } else if (param instanceof Float) {
             return BigDecimal.valueOf((Float)param).toPlainString();
         } else if (param instanceof Long) {
-            return BigDecimal.valueOf((Long) param).toPlainString();
+            return param.toString();
         } else if (param instanceof Integer) {
-            return BigDecimal.valueOf((Integer) param).toPlainString();
+            return param.toString();
         } else {
             throw new IllegalArgumentException(String.format("invalid BigDecimal type: %s [%s]", param.getClass().getName(), param));
         }
