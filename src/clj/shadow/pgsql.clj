@@ -536,10 +536,7 @@
                (reduce (fn [result row]
                          (let [params (columns-fn row columns)
                                row-result (.execute prep params)]
-                           (if returning?
-                             (conj! result (merge-fn row row-result))
-                             (conj! result row)
-                             )))
+                           (conj! result (merge-fn row row-result))))
                        (transient []))
                (persistent!))
           ;; do not accumulate a result unless requested

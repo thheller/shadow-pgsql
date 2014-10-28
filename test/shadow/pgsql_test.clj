@@ -88,7 +88,7 @@
 
     (let [id (sql/insert-one db ?insert-t-int2 {:t-int2 1})]
 
-      (is (= {:t-int2 2} (sql/insert-one! db :types {:t-int2 2})))
+      (is (nil? (sql/insert-one! db :types {:t-int2 2})))
 
       (is (number? (sql/insert-one! db :types {:t-int2 2} :id)))
 
