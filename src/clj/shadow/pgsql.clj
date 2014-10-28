@@ -44,7 +44,7 @@
 
 (def ^{:private true
        :dynamic true}
-  *open-connections* {})
+     *open-connections* {})
 
 (defprotocol ConnectionScope
   (-with-connection [_ task-fn])
@@ -73,18 +73,19 @@
 
 (defmacro with-transaction [db & body]
   `(let [body-fn# (fn [] ~@body)]
-     (-with-connection ~db (fn [^Connection con#]
-                             (if (.isInTransaction con#)
-                               (body-fn#)
-                               (do (.begin con#)
-                                   (try
-                                     (let [result# (body-fn#)]
-                                       (.commit con#)
-                                       result#)
-                                     (catch Throwable t#
-                                       (.rollback con#)
-                                       (throw t#)
-                                       ))))))))
+     (-with-connection ~db
+       (fn [^Connection con#]
+         (if (.isInTransaction con#)
+           (body-fn#)
+           (do (.begin con#)
+               (try
+                 (let [result# (body-fn#)]
+                   (.commit con#)
+                   result#)
+                 (catch Throwable t#
+                   (.rollback con#)
+                   (throw t#)
+                   ))))))))
 
 (defn ^Connection get-connection [db]
   (if-let [con (-get-connection db)]
@@ -132,9 +133,9 @@
 
    returns {key1 value1, key2, value2, ...}"
   ([key-fn]
-    (result->map key-fn identity))
+   (result->map key-fn identity))
   ([key-fn value-fn]
-    (result->map key-fn value-fn {}))
+   (result->map key-fn value-fn {}))
   ([key-fn value-fn init]
    (reify
      ResultBuilder
@@ -172,7 +173,7 @@
   (OffsetDateTime/now))
 
 (def ^{:doc "stores keywords without leading \":\""}
-  legacy-keyword-type
+     legacy-keyword-type
   (Text.
     (reify Text$Conversion
       (encode [_ param]
@@ -190,7 +191,7 @@
             (keyword s)))))))
 
 (def ^{:doc "stores keywords as-is"}
-  keyword-type
+     keyword-type
   (Text.
     (reify Text$Conversion
       (encode [_ param]
@@ -228,7 +229,7 @@
       (conj! state object))
     (addNull [_ state index]
       ;; FIXME: probably to harsh to throw
-      (throw (ex-info "NULL not supported in sets")))
+      (throw (ex-info "NULL not supported in sets" {})))
     (complete [_ state]
       (persistent! state))))
 
@@ -250,7 +251,7 @@
       (conj! state object))
     (addNull [_ state index]
       ;; FIXME: probably to harsh to throw
-      (throw (ex-info "NULL not supported in vectors")))
+      (throw (ex-info "NULL not supported in vectors" {})))
     (complete [_ state]
       (persistent! state))))
 
@@ -530,16 +531,21 @@
 
     (with-transaction db
       (with-open [prep (.prepareQuery (get-connection db) query)]
-        (->> data
-             (reduce (fn [result row]
-                       (let [params (columns-fn row columns)
-                             row-result (.execute prep params)]
-                         (if returning?
-                           (conj! result (merge-fn row row-result))
-                           (conj! result row)
-                           )))
-                     (transient []))
-             (persistent!))))))
+        (if returning?
+          (->> data
+               (reduce (fn [result row]
+                         (let [params (columns-fn row columns)
+                               row-result (.execute prep params)]
+                           (if returning?
+                             (conj! result (merge-fn row row-result))
+                             (conj! result row)
+                             )))
+                       (transient []))
+               (persistent!))
+          ;; do not accumulate a result unless requested
+          (doseq [row data]
+            (.execute prep (columns-fn row columns)))
+          )))))
 
 (defn insert-one [db stmt data]
   (first (insert db stmt [data])))
