@@ -180,8 +180,10 @@ public class ProtocolInput {
         current.get(data);
     }
 
-    public StatementResult readStatementResult() throws IOException {
+    public StatementResult readStatementResult(String sql) throws IOException {
         StatementResult result = null;
+
+        Map<String, String> errorData = null;
 
         RESULT_LOOP:
         while (true) {
@@ -203,10 +205,18 @@ public class ProtocolInput {
                     pg.input.readReadyForQuery();
                     break RESULT_LOOP;
                 }
+                case 'E': {
+                    errorData = pg.input.readMessages();
+                    break;
+                }
                 default: {
                     throw new IllegalStateException(String.format("invalid protocol action while reading statement results: '%s'", type));
                 }
             }
+        }
+
+        if (errorData != null) {
+            throw new CommandException(String.format("Failed to bind Statement\n[SQL]: %s", sql), errorData);
         }
 
         return result;

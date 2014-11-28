@@ -152,7 +152,7 @@ public class Connection implements AutoCloseable {
 
         output.flushAndReset();
 
-        return input.readStatementResult();
+        return input.readStatementResult(query);
     }
 
     // FIXME: transaction mode

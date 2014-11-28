@@ -36,7 +36,7 @@ public class PreparedStatement extends PreparedBase {
         executeWithParams(NO_COLUMNS, queryParams);
 
         // flow <- 2/C/Z
-        return pg.input.readStatementResult();
+        return pg.input.readStatementResult(statement.getSQLString());
     }
 
 

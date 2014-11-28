@@ -367,4 +367,15 @@ public class BasicTest {
             assertNull(result.get("c"));
         }
     }
+
+
+    @Test
+    public void testNotNull() throws Exception {
+        try {
+            pg.executeWith("INSERT INTO dummy (nnull) VALUES ($1)", new Object[]{null});
+            fail("not supposed to succeed, handed null value to not null field");
+        } catch (CommandException e) {
+            // TODO: verify
+        }
+    }
 }
