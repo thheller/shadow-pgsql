@@ -1,4 +1,4 @@
-(defproject thheller/shadow-pgsql "0.7.0-SNAPSHOT"
+(defproject thheller/shadow-pgsql "0.8.0-SNAPSHOT"
   :description "PostgreSQL Client for Java and Clojure"
   :url "http://github.com/thheller/shadow-pgsql"
   :license {:name "Eclipse Public License"
@@ -10,5 +10,5 @@
   :source-paths ["src/clj"]
 
   :profiles {:dev {:source-paths ["src/dev"]
-                   :dependencies [[org.clojure/clojure "1.6.0"]
+                   :dependencies [[org.clojure/clojure "1.7.0"]
                                   [org.clojure/tools.namespace "0.2.4"]]}})

@@ -44,7 +44,7 @@
 
 (def ^{:private true
        :dynamic true}
-     *open-connections* {})
+*open-connections* {})
 
 (defprotocol ConnectionScope
   (-with-connection [_ task-fn])
@@ -74,18 +74,18 @@
 (defmacro with-transaction [db & body]
   `(let [body-fn# (fn [] ~@body)]
      (-with-connection ~db
-       (fn [^Connection con#]
-         (if (.isInTransaction con#)
-           (body-fn#)
-           (do (.begin con#)
-               (try
-                 (let [result# (body-fn#)]
-                   (.commit con#)
-                   result#)
-                 (catch Throwable t#
-                   (.rollback con#)
-                   (throw t#)
-                   ))))))))
+                       (fn [^Connection con#]
+                         (if (.isInTransaction con#)
+                           (body-fn#)
+                           (do (.begin con#)
+                               (try
+                                 (let [result# (body-fn#)]
+                                   (.commit con#)
+                                   result#)
+                                 (catch Throwable t#
+                                   (.rollback con#)
+                                   (throw t#)
+                                   ))))))))
 
 (defn ^Connection get-connection [db]
   (if-let [con (-get-connection db)]
@@ -173,7 +173,7 @@
   (OffsetDateTime/now))
 
 (def ^{:doc "stores keywords without leading \":\""}
-     legacy-keyword-type
+legacy-keyword-type
   (Text.
     (reify Text$Conversion
       (encode [_ param]
@@ -191,7 +191,7 @@
             (keyword s)))))))
 
 (def ^{:doc "stores keywords as-is"}
-     keyword-type
+keyword-type
   (Text.
     (reify Text$Conversion
       (encode [_ param]
@@ -467,12 +467,13 @@
       )))
 
 (defn query
-  [db query & params]
-  (let [query (as-query db query)
-        params (into [] params)]
-
-    (-with-connection db (fn [^Connection con]
-                           (.query con query params)))))
+  ([db q]
+   (query db q []))
+  ([db query params]
+   {:pre [(sequential? params)]}
+   (let [query (as-query db query)]
+     (-with-connection db (fn [^Connection con]
+                            (.query con query params))))))
 
 (defn insert
   [db
@@ -635,42 +636,47 @@
         (.execute prep [p1 p2 p3 p4 p5 p6 p7 p8 p9 p10]))
       )))
 
-(defn execute [db stmt & params]
-  (let [stmt (as-statement db stmt)
-        params (into [] params)]
-    (-with-connection db (fn [^Connection con]
-                           (-> (.execute con stmt params)
-                               (.getRowsAffected))))))
+(defn execute
+  ([db stmt]
+   (execute db stmt []))
+  ([db stmt params]
+   {:pre [(sequential? params)]}
+   (let [stmt (as-statement db stmt)]
+     (-with-connection db (fn [^Connection con]
+                            (-> (.execute con stmt params)
+                                (.getRowsAffected)))))))
 
 (defn update!
   "(sql/update! db :table {:column value, ...} \"id = $1\" id)
    this is also potentially dangerous since all columns are updated"
-  [{:keys [table-naming column-naming ^TypeRegistry types] :as db} table data where & params]
-  (let [offset (count params)
-        table-name (to-sql-name table-naming table)
+  ([db table data]
+   (update! db table data "1=1" []))
+  ([{:keys [table-naming column-naming ^TypeRegistry types] :as db} table data where params]
+   {:pre [(sequential? params)]}
+   (let [offset (count params)
+         table-name (to-sql-name table-naming table)
 
-        column-names (->> (keys data)
-                          (map #(to-sql-name column-naming %)))
+         column-names (->> (keys data)
+                           (map #(to-sql-name column-naming %)))
 
-        sql (str "UPDATE "
-                 (quoted table-name)
-                 " SET "
-                 (->> column-names
-                      (map quoted)
-                      (map-indexed (fn [idx col-name]
-                                     (str col-name " = $" (+ idx offset 1))))
-                      (str/join ", "))
-                 " WHERE "
-                 where)]
-    (apply execute
-           db
-           {:sql sql
-            ;; type hints for the columns since we know table/column
-            ;; nil for remainder since we only know expected oid
-            :params (->> column-names
-                         (map #(.getTypeHandlerForColumn types table-name %))
-                         (concat (repeat (count params) nil)))}
-           (concat params (vals data)))))
+         sql (str "UPDATE "
+                  (quoted table-name)
+                  " SET "
+                  (->> column-names
+                       (map quoted)
+                       (map-indexed (fn [idx col-name]
+                                      (str col-name " = $" (+ idx offset 1))))
+                       (str/join ", "))
+                  " WHERE "
+                  where)]
+     (execute db
+              {:sql sql
+               ;; type hints for the columns since we know table/column
+               ;; nil for remainder since we only know expected oid
+               :params (->> column-names
+                            (map #(.getTypeHandlerForColumn types table-name %))
+                            (concat (repeat (count params) nil)))}
+              (into params (vals data))))))
 
 (defn build-types
   ([type-map table-naming column-naming]
@@ -742,23 +748,23 @@
 (defrecord DefQuery [stmt]
   clojure.lang.IFn
   (invoke [this db]
-    (query db stmt))
+    (query db stmt []))
   (invoke [this db a1]
-    (query db stmt a1))
+    (query db stmt [a1]))
   (invoke [this db a1 a2]
-    (query db stmt a1 a2))
+    (query db stmt [a1 a2]))
   (invoke [this db a1 a2 a3]
-    (query db stmt a1 a2 a3))
+    (query db stmt [a1 a2 a3]))
   (invoke [this db a1 a2 a3 a4]
-    (query db stmt a1 a2 a3 a4))
+    (query db stmt [a1 a2 a3 a4]))
   (invoke [this db a1 a2 a3 a4 a5]
-    (query db stmt a1 a2 a3 a4 a5))
+    (query db stmt [a1 a2 a3 a4 a5]))
   (invoke [this db a1 a2 a3 a4 a5 a6]
-    (query db stmt a1 a2 a3 a4 a5 a6))
+    (query db stmt [a1 a2 a3 a4 a5 a6]))
   (invoke [this db a1 a2 a3 a4 a5 a6 a7]
-    (query db stmt a1 a2 a3 a4 a5 a6 a7))
+    (query db stmt [a1 a2 a3 a4 a5 a6 a7]))
   (invoke [this db a1 a2 a3 a4 a5 a6 a7 a8]
-    (query db stmt a1 a2 a3 a4 a5 a6 a7 a8))
+    (query db stmt [a1 a2 a3 a4 a5 a6 a7 a8]))
   (invoke [this db a1 a2 a3 a4 a5 a6 a7 a8 a9]
     (throw (ex-info "I'M LAZY! need more args" {}))))
 

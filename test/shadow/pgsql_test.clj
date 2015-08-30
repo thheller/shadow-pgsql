@@ -51,14 +51,13 @@
 
     (sql/execute db {:sql "INSERT INTO array_types (atext) VALUES ($1)"
                      :params [keyword-set-type]}
-                 #{:clojure :postgresql :java})
+                 [#{:clojure :postgresql :java}])
 
     (pprint (sql/query db "SELECT atext FROM array_types"))
 
     (pprint (sql/query db {:sql "SELECT atext FROM array_types WHERE atext @> ARRAY[$1]"
                            :params [sql/keyword-type]}
-                       :clojure
-                       ))
+                       [:clojure]))
 
     ))
 
@@ -97,9 +96,9 @@
         (is (= 2 (:t-int2 m)))
         (is (pos? (:id m))))
 
-      (sql/update! db :types {:t-int2 3} "id = $1" id)
+      (sql/update! db :types {:t-int2 3} "id = $1" [id])
 
-      (let [val (sql/query db ?update-add-one id)]
+      (let [val (sql/query db ?update-add-one [id])]
         (is (= 4 val))))))
 
 (deftest test-hstore-strings
