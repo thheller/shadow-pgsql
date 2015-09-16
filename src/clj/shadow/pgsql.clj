@@ -357,8 +357,11 @@ keyword-type
       (complete [_ m]
         (persistent! m)))))
 
-(deftype ClojureStatement [db sql params types]
+(deftype ClojureStatement [db name sql params types]
   Statement
+  (getName [_]
+    name)
+
   (getSQLString [_]
     sql)
 
@@ -368,23 +371,26 @@ keyword-type
   (getTypeRegistry [_]
     types))
 
-(deftype ClojureQuery [db sql params types result-builder row-builder]
+(deftype ClojureQuery [db name sql params types result-builder row-builder]
   Query
-  (getSQLString [this]
+  (getName [_]
+    name)
+
+  (getSQLString [_]
     sql)
 
-  (getParameterTypes [this]
+  (getParameterTypes [_]
     params)
 
-  (getTypeRegistry [this]
+  (getTypeRegistry [_]
     types)
 
-  (createResultBuilder [this columns]
+  (createResultBuilder [_ columns]
     (if (fn? result-builder)
       (result-builder db columns)
       result-builder))
 
-  (createRowBuilder [this columns]
+  (createRowBuilder [_ columns]
     (if (fn? row-builder)
       (row-builder db columns)
       row-builder)))
@@ -392,11 +398,12 @@ keyword-type
 (defn ^Query as-query [db args]
   (cond
     (string? args)
-    (ClojureQuery. db args [] (:types db) result->vec row->map)
+    (ClojureQuery. db nil args [] (:types db) result->vec row->map)
 
     (map? args)
-    (let [{:keys [sql params types result row]} args]
+    (let [{:keys [sql name params types result row]} args]
       (ClojureQuery. db
+                     name
                      sql
                      (or params [])
                      (or types
@@ -414,11 +421,12 @@ keyword-type
 (defn ^Statement as-statement [db args]
   (cond
     (string? args)
-    (ClojureStatement. db args [] (:types db))
+    (ClojureStatement. db nil args [] (:types db))
 
     (map? args)
-    (let [{:keys [sql params types]} args]
+    (let [{:keys [sql name params types]} args]
       (ClojureStatement. db
+                         name
                          sql
                          (or params [])
                          (or types
@@ -528,7 +536,8 @@ keyword-type
                  ") RETURNING "
                  (str/join ", " returning-names)) ;; already quoted if needed
 
-        query (ClojureQuery. db sql param-types types result-builder row-builder)]
+        ;; FIXME: find a way to specify the query name
+        query (ClojureQuery. db (str "insert." table-name) sql param-types types result-builder row-builder)]
 
     (with-transaction db
       (with-open [prep (.prepareQuery (get-connection db) query)]
@@ -716,7 +725,8 @@ keyword-type
            pool
            table-naming
            column-naming
-           types]
+           types
+           metrics-registry]
     :or {host "localhost"
          port 5432
          table-naming (DefaultNaming.)
@@ -727,7 +737,8 @@ keyword-type
   ;; FIXME: validate args
   (let [db-config (doto (DatabaseConfig. host port)
                     (.setUser user)
-                    (.setDatabase database))
+                    (.setDatabase database)
+                    (.setMetricRegistry metrics-registry))
         db (.get db-config)
         pool (DatabasePool. db)]
     (-> (DB. pool table-naming column-naming types opts)
@@ -769,5 +780,6 @@ keyword-type
     (throw (ex-info "I'M LAZY! need more args" {}))))
 
 (defmacro defquery [name sql & kv]
-  (let [sql (-> sql (str/replace #"\s+" " ") (.trim))]
-    `(def ~name (->DefQuery (array-map :sql ~sql ~@kv)))))
+  (let [sql (-> sql (str/replace #"\s+" " ") (.trim))
+        query-name (str *ns* "/" name)]
+    `(def ~name (->DefQuery (array-map :name ~query-name :sql ~sql ~@kv)))))

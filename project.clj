@@ -4,7 +4,8 @@
   :license {:name "Eclipse Public License"
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
-  :dependencies [[org.apache.commons/commons-pool2 "2.2"]]
+  :dependencies [[org.apache.commons/commons-pool2 "2.2"]
+                 [io.dropwizard.metrics/metrics-core "3.1.2"]]
 
   :java-source-paths ["src/java"]
   :source-paths ["src/clj"]

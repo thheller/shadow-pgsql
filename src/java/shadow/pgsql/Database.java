@@ -1,5 +1,8 @@
 package shadow.pgsql;
 
+import com.codahale.metrics.Counter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
 import shadow.pgsql.utils.RowProcessor;
 
 import java.io.IOException;
@@ -26,8 +29,25 @@ public class Database {
 
     private final DatabaseConfig config;
 
+    final MetricRegistry metricRegistry;
+    final Timer connectTimer;
+    final Counter preparedCounter;
+
+    final Timer unnamedPrepareTimer;
+    final Timer unnamedExecuteTimer;
+
     public Database(DatabaseConfig config) {
         this.config = config;
+        MetricRegistry mr = config.getMetricRegistry();
+        if (mr == null) {
+            mr = new MetricRegistry();
+        }
+        this.metricRegistry = mr;
+
+        this.connectTimer = mr.timer(MetricRegistry.name("shadow-pgsql", "connect"));
+        this.preparedCounter = mr.counter(MetricRegistry.name("shadow-pgsql", "prepared"));
+        this.unnamedPrepareTimer = mr.timer(MetricRegistry.name("shadow-pgsql", "query", "unnamed", "prepare"));
+        this.unnamedExecuteTimer = mr.timer(MetricRegistry.name("shadow-pgsql", "query", "unnamed", "execute"));
     }
 
     public static Database setup(String host, int port, String user, String databaseName) throws IOException {
@@ -39,10 +59,15 @@ public class Database {
         return db.get();
     }
 
+    public MetricRegistry getMetricRegistry() {
+        return metricRegistry;
+    }
+
     public Connection connect() throws IOException {
         Connection pg = null;
-
         IO io = null;
+
+        Timer.Context timerContext = connectTimer.time();
 
         SocketChannel channel = SocketChannel.open(new InetSocketAddress(config.host, config.port));
         channel.configureBlocking(true);
@@ -74,6 +99,9 @@ public class Database {
 
         pg = new Connection(this, io);
         pg.startup(config.connectParams, config.authHandler);
+
+        timerContext.stop();
+
         return pg;
     }
 
@@ -82,6 +110,7 @@ public class Database {
         try (Connection con = connect()) {
 
             SimpleQuery pg_types = new SimpleQuery("SELECT oid, typname FROM pg_type");
+            pg_types.setName("schema.types");
             pg_types.setRowBuilder(Helpers.ROW_AS_LIST);
             pg_types.setResultBuilder(
                     new RowProcessor<List>() {
@@ -113,7 +142,7 @@ public class Database {
                     " AND b.relname NOT LIKE 'pg_%'" +
                     " AND b.relname NOT LIKE 'sql_%'"
             );
-
+            schema.setName("schema.names");
             schema.setRowBuilder(Helpers.ROW_AS_LIST);
             schema.setResultBuilder(
                     new RowProcessor<List>() {
@@ -147,7 +176,7 @@ public class Database {
     public int getOidForName(String typeName) {
         Integer i = this.name2oid.get(typeName);
         if (i == null) {
-            throw new IllegalArgumentException(String.format("unknown type: %2", typeName));
+            throw new IllegalArgumentException(String.format("unknown type: %s", typeName));
         }
 
         return i;

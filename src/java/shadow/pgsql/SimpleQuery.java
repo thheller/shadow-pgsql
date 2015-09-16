@@ -8,6 +8,8 @@ import java.util.List;
  */
 public class SimpleQuery implements Query {
 
+    private String name;
+
     private final String sql;
 
     private final List<TypeHandler> parameterTypes;
@@ -38,6 +40,15 @@ public class SimpleQuery implements Query {
         this.parameterTypes = parameterTypes;
         this.resultBuilder = resultBuilder;
         this.rowBuilder = rowBuilder;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public TypeRegistry getTypeRegistry() {

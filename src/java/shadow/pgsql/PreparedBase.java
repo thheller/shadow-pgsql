@@ -1,5 +1,8 @@
 package shadow.pgsql;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
+
 import java.io.IOException;
 import java.util.List;
 
@@ -12,10 +15,21 @@ public abstract class PreparedBase implements AutoCloseable {
 
     protected final TypeHandler[] typeEncoders;
 
-    protected PreparedBase(Connection pg, String statementId, TypeHandler[] typeEncoders) {
+    final Timer executeTimer;
+
+    protected PreparedBase(Connection pg, String statementId, TypeHandler[] typeEncoders, String metricsName) {
         this.pg = pg;
         this.statementId = statementId;
         this.typeEncoders = typeEncoders;
+
+        // FIXME: don't like that this is constructed every time, Query/Statement maybe a better place to keep these?
+        if (metricsName != null) {
+            this.executeTimer = pg.db.metricRegistry.timer(MetricRegistry.name("shadow-pgsql", "query", metricsName, "execute"));
+        } else {
+            this.executeTimer = pg.db.unnamedExecuteTimer;
+        }
+
+        pg.db.preparedCounter.inc();
     }
 
     public abstract String getSQLString();
@@ -108,5 +122,7 @@ public abstract class PreparedBase implements AutoCloseable {
 
     public void close() throws IOException {
         pg.closeStatement(statementId);
+
+        pg.db.preparedCounter.dec();
     }
 }

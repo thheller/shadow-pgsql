@@ -7,6 +7,8 @@ import java.util.List;
  * Created by zilence on 12.08.14.
  */
 public class SimpleStatement implements Statement {
+    private String name;
+
     private final String sql;
     private final List<TypeHandler> parameterTypes;
 
@@ -15,6 +17,15 @@ public class SimpleStatement implements Statement {
     public SimpleStatement(String sql, List<TypeHandler> parameterTypes) {
         this.sql = sql;
         this.parameterTypes = parameterTypes;
+    }
+
+    @Override
+    public String getName() {
+        return name;
+    }
+
+    public void setName(String name) {
+        this.name = name;
     }
 
     public TypeRegistry getTypeRegistry() {

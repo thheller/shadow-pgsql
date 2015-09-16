@@ -1,5 +1,7 @@
 package shadow.pgsql;
 
+import com.codahale.metrics.Timer;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -14,7 +16,7 @@ public class PreparedStatement extends PreparedBase {
     private final Statement statement;
 
     public PreparedStatement(Connection pg, String statementId, TypeHandler[] typeEncoders, Statement statement) {
-        super(pg, statementId, typeEncoders);
+        super(pg, statementId, typeEncoders, statement.getName());
         this.statement = statement;
     }
 
@@ -32,11 +34,17 @@ public class PreparedStatement extends PreparedBase {
     }
 
     public StatementResult execute(List queryParams) throws IOException {
+        Timer.Context timerContext = executeTimer.time();
+
         // flow -> B/E/S
         executeWithParams(NO_COLUMNS, queryParams);
 
         // flow <- 2/C/Z
-        return pg.input.readStatementResult(statement.getSQLString());
+        final StatementResult result =  pg.input.readStatementResult(statement.getSQLString());
+
+        timerContext.stop();
+
+        return result;
     }
 
 

@@ -1,5 +1,7 @@
 package shadow.pgsql;
 
+import com.codahale.metrics.Timer;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
@@ -17,7 +19,7 @@ public class PreparedQuery extends PreparedBase {
     private final RowBuilder rowBuilder;
 
     public PreparedQuery(Connection pg, String statementId, TypeHandler[] typeEncoders, Query query, ColumnInfo[] columnInfos, TypeHandler[] typeDecoders, ResultBuilder resultBuilder, RowBuilder rowBuilder) {
-        super(pg, statementId, typeEncoders);
+        super(pg, statementId, typeEncoders, query.getName());
         this.query = query;
         this.columnInfos = columnInfos;
         this.typeDecoders = typeDecoders;
@@ -35,6 +37,8 @@ public class PreparedQuery extends PreparedBase {
     }
 
     public Object execute(final List queryParams) throws IOException {
+        final Timer.Context timerContext = executeTimer.time();
+
         executeWithParams(typeDecoders, queryParams);
 
         Object queryResult = resultBuilder.init();
@@ -46,6 +50,10 @@ public class PreparedQuery extends PreparedBase {
         // flow <- 2/D*/n?/C/Z
         RESULT_LOOP:
         while (true) {
+            // it might be better performance to batch READ multiple D frames and batch PARSE instead of READ/PARSE/READ/PARSE/...
+            // would use more memory but be more efficient on the CPU cache level since we are not jumping to IO so much
+            // probably overthinking it since the limiting factor probably is IO
+            // FIXME: investigate
             final char type = pg.input.readNextCommand();
 
             switch (type) {
@@ -137,7 +145,11 @@ public class PreparedQuery extends PreparedBase {
             throw new IllegalStateException("Command did not complete");
         }
 
-        return resultBuilder.complete(queryResult);
+        final Object result = resultBuilder.complete(queryResult);
+
+        timerContext.stop();
+
+        return result;
     }
 
 }

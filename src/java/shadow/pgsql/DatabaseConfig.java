@@ -1,5 +1,7 @@
 package shadow.pgsql;
 
+import com.codahale.metrics.MetricRegistry;
+
 import javax.net.ssl.SSLContext;
 import java.io.IOException;
 import java.util.HashMap;
@@ -18,6 +20,8 @@ public class DatabaseConfig {
     boolean ssl = false;
     SSLContext sslContext = null;
     boolean fetchSchema = true;
+
+    MetricRegistry metricRegistry = null;
 
     public DatabaseConfig(String host, int port) {
         this.host = host;
@@ -59,6 +63,14 @@ public class DatabaseConfig {
 
     public AuthHandler getAuthHandler() {
         return authHandler;
+    }
+
+    public MetricRegistry getMetricRegistry() {
+        return metricRegistry;
+    }
+
+    public void setMetricRegistry(MetricRegistry metricRegistry) {
+        this.metricRegistry = metricRegistry;
     }
 
     public DatabaseConfig noSchema() {

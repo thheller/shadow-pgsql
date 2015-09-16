@@ -1,5 +1,8 @@
 package shadow.pgsql;
 
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
+
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -221,6 +224,8 @@ public class Connection implements AutoCloseable {
     }
 
     public PreparedStatement prepare(Statement statement) throws IOException {
+        Timer.Context timerContext = startPrepareTimer(statement.getName());
+
         final List<TypeHandler> typeHints = statement.getParameterTypes();
 
         final String statementId = String.format("s%d", queryId++);
@@ -297,6 +302,8 @@ public class Connection implements AutoCloseable {
 
             final TypeHandler[] encoders = getParamTypes(paramInfo, typeHints, statement.getTypeRegistry());
 
+            timerContext.stop();
+
             return new PreparedStatement(this, statementId, encoders, statement);
         } catch (Exception e) {
             // FIXME: this might also throw!
@@ -324,7 +331,21 @@ public class Connection implements AutoCloseable {
         return encoders;
     }
 
+    private Timer.Context startPrepareTimer(String name) {
+        Timer prepareTimer = null;
+
+        if (name != null) {
+            prepareTimer = this.db.metricRegistry.timer(MetricRegistry.name("shadow-pgsql", "query", name, "prepare"));
+        } else {
+            prepareTimer = this.db.unnamedPrepareTimer;
+        }
+
+        return prepareTimer.time();
+    }
+
     public PreparedQuery prepareQuery(Query query) throws IOException {
+        Timer.Context timerContext = startPrepareTimer(query.getName());
+
         final List<TypeHandler> typeHints = query.getParameterTypes();
 
         final String statementId = String.format("s%d", queryId++);
@@ -408,6 +429,8 @@ public class Connection implements AutoCloseable {
                 ColumnInfo f = columnInfos[i];
                 decoders[i] = query.getTypeRegistry().getTypeHandlerForField(db, f);
             }
+
+            timerContext.stop();
 
             return new PreparedQuery(this, statementId, encoders, query, columnInfos, decoders, resultBuilder, rowBuilder);
         } catch (Exception e) {

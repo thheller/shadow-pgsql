@@ -1,5 +1,8 @@
 package shadow.pgsql;
 
+import com.codahale.metrics.Histogram;
+import com.codahale.metrics.MetricRegistry;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -22,9 +25,12 @@ public class ProtocolInput {
     public ByteBuffer current = defaultBuffer;
     public int currentSize = 0;
 
+    final Histogram frameSizes;
+
     public ProtocolInput(Connection pg, IO io) {
         this.pg = pg;
         this.io = io;
+        this.frameSizes = pg.db.metricRegistry.histogram(MetricRegistry.name("shadow-pgsql", "frame-sizes"));
     }
 
     String readString() throws IOException {
@@ -74,6 +80,8 @@ public class ProtocolInput {
 
             final char type = (char) frame.get();
             final int size = currentSize = frame.getInt() - 4; // size includes itself
+
+            frameSizes.update(size);
 
             // FIXME: worth skipping?
             if (size == 0) {
