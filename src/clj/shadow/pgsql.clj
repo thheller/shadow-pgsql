@@ -726,7 +726,8 @@ keyword-type
            table-naming
            column-naming
            types
-           metrics-registry]
+           metric-registry
+           metric-collector]
     :or {host "localhost"
          port 5432
          table-naming (DefaultNaming.)
@@ -738,7 +739,9 @@ keyword-type
   (let [db-config (doto (DatabaseConfig. host port)
                     (.setUser user)
                     (.setDatabase database)
-                    (.setMetricRegistry metrics-registry))
+                    (.setMetricRegistry metric-registry) )
+        _ (when metric-collector
+            (.setMetricCollector db-config metric-collector))
         db (.get db-config)
         pool (DatabasePool. db)]
     (-> (DB. pool table-naming column-naming types opts)

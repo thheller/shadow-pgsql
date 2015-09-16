@@ -36,6 +36,8 @@ public class Database {
     final Timer unnamedPrepareTimer;
     final Timer unnamedExecuteTimer;
 
+    final MetricCollector metricCollector;
+
     public Database(DatabaseConfig config) {
         this.config = config;
         MetricRegistry mr = config.getMetricRegistry();
@@ -43,6 +45,7 @@ public class Database {
             mr = new MetricRegistry();
         }
         this.metricRegistry = mr;
+        this.metricCollector = config.metricCollector;
 
         this.connectTimer = mr.timer(MetricRegistry.name("shadow-pgsql", "connect"));
         this.preparedCounter = mr.counter(MetricRegistry.name("shadow-pgsql", "prepared"));

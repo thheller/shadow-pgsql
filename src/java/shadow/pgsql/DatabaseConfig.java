@@ -22,6 +22,17 @@ public class DatabaseConfig {
     boolean fetchSchema = true;
 
     MetricRegistry metricRegistry = null;
+    MetricCollector metricCollector = new VoidCollector();
+
+    public static final class VoidCollector implements MetricCollector {
+        @Override
+        public void collectPrepareTime(String name, long nanos) {
+        }
+
+        @Override
+        public void collectExecuteTime(String name, long nanos) {
+        }
+    }
 
     public DatabaseConfig(String host, int port) {
         this.host = host;
@@ -46,6 +57,14 @@ public class DatabaseConfig {
 
     public String getConnectParam(String key) {
         return connectParams.get(key);
+    }
+
+    public MetricCollector getMetricCollector() {
+        return metricCollector;
+    }
+
+    public void setMetricCollector(MetricCollector metricCollector) {
+        this.metricCollector = metricCollector;
     }
 
     public DatabaseConfig setAuthHandler(AuthHandler authHandler) {
