@@ -26,11 +26,11 @@ public class DatabaseConfig {
 
     public static final class VoidCollector implements MetricCollector {
         @Override
-        public void collectPrepareTime(String name, long nanos) {
+        public void collectPrepareTime(String name, String sql, long nanos) {
         }
 
         @Override
-        public void collectExecuteTime(String name, long nanos) {
+        public void collectExecuteTime(String name, String sql, long nanos) {
         }
     }
 

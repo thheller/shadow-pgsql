@@ -302,7 +302,7 @@ public class Connection implements AutoCloseable {
 
             final TypeHandler[] encoders = getParamTypes(paramInfo, typeHints, statement.getTypeRegistry());
 
-            db.metricCollector.collectPrepareTime(statement.getName(), timerContext.stop());
+            db.metricCollector.collectPrepareTime(statement.getName(), statement.getSQLString(), timerContext.stop());
 
             return new PreparedStatement(this, statementId, encoders, statement);
         } catch (Exception e) {
@@ -430,7 +430,7 @@ public class Connection implements AutoCloseable {
                 decoders[i] = query.getTypeRegistry().getTypeHandlerForField(db, f);
             }
 
-            db.metricCollector.collectPrepareTime(query.getName(), timerContext.stop());
+            db.metricCollector.collectPrepareTime(query.getName(), query.getSQLString(), timerContext.stop());
 
             return new PreparedQuery(this, statementId, encoders, query, columnInfos, decoders, resultBuilder, rowBuilder);
         } catch (Exception e) {

@@ -147,7 +147,7 @@ public class PreparedQuery extends PreparedBase {
 
         final Object result = resultBuilder.complete(queryResult);
 
-        pg.db.metricCollector.collectExecuteTime(query.getName(), timerContext.stop());
+        pg.db.metricCollector.collectExecuteTime(query.getName(), query.getSQLString(), timerContext.stop());
 
         return result;
     }

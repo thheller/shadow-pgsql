@@ -9,9 +9,10 @@ public interface MetricCollector {
      * and it telling us it is ready to do so (includes network latency)
      *
      * @param name of the query/statement, may be null
+     * @param sql
      * @param nanos
      */
-    void collectPrepareTime(String name, long nanos);
+    void collectPrepareTime(String name, String sql, long nanos);
 
     /**
      * time spent to execute a "portal"
@@ -23,7 +24,8 @@ public interface MetricCollector {
      * - parsing data and constructing result values
      *
      * @param name may be null
+     * @param sql
      * @param nanos
      */
-    void collectExecuteTime(String name, long nanos);
+    void collectExecuteTime(String name, String sql, long nanos);
 }

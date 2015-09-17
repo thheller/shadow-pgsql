@@ -42,7 +42,7 @@ public class PreparedStatement extends PreparedBase {
         // flow <- 2/C/Z
         final StatementResult result =  pg.input.readStatementResult(statement.getSQLString());
 
-        pg.db.metricCollector.collectExecuteTime(statement.getName(), timerContext.stop());
+        pg.db.metricCollector.collectExecuteTime(statement.getName(), statement.getSQLString(), timerContext.stop());
 
         return result;
     }
