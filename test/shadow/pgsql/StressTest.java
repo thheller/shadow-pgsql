@@ -33,15 +33,16 @@ public class StressTest {
 
         Connection pg = db.connect();
 
-        SimpleQuery q = new SimpleQuery("INSERT INTO binary_types (fbytea) VALUES ($1) RETURNING fbytea");
-        q.setRowBuilder(Helpers.ONE_COLUMN);
-        q.setResultBuilder(Helpers.ONE_ROW);
+        SQL q = SQL.query("INSERT INTO binary_types (fbytea) VALUES ($1) RETURNING fbytea")
+                .buildRowsWith(Helpers.ONE_COLUMN)
+                .buildResultsWith(Helpers.ONE_ROW)
+                .create();
 
-        try (PreparedQuery pq = pg.prepareQuery(q)) {
+        try (PreparedSQL pq = pg.prepare(q)) {
             byte[] send = new byte[1000000];
             new Random().nextBytes(send);
 
-            byte[] recv = (byte[]) pq.executeWith(send);
+            byte[] recv = (byte[]) pq.queryWith(send);
 
             assertArrayEquals(send, recv);
         }

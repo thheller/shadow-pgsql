@@ -224,7 +224,7 @@ public class ProtocolInput {
         }
 
         if (errorData != null) {
-            throw new CommandException(String.format("Failed to bind Statement\n[SQL]: %s", sql), errorData);
+            throw new CommandException(String.format("Failed to bind Statement\n[sql]: %s", sql), errorData);
         }
 
         return result;

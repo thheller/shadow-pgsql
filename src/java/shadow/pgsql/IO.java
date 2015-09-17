@@ -8,7 +8,7 @@ import java.nio.ByteBuffer;
  * Created by zilence on 23.08.14.
  */
 public interface IO extends Closeable {
-    public void send(ByteBuffer buf) throws IOException;
+    void send(ByteBuffer buf) throws IOException;
 
-    public void recv(ByteBuffer buf) throws IOException;
+    void recv(ByteBuffer buf) throws IOException;
 }

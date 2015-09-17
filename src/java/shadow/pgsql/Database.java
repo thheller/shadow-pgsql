@@ -40,17 +40,13 @@ public class Database {
 
     public Database(DatabaseConfig config) {
         this.config = config;
-        MetricRegistry mr = config.getMetricRegistry();
-        if (mr == null) {
-            mr = new MetricRegistry();
-        }
-        this.metricRegistry = mr;
+        this.metricRegistry = config.getMetricRegistry();
         this.metricCollector = config.metricCollector;
 
-        this.connectTimer = mr.timer(MetricRegistry.name("shadow-pgsql", "connect"));
-        this.preparedCounter = mr.counter(MetricRegistry.name("shadow-pgsql", "prepared"));
-        this.unnamedPrepareTimer = mr.timer(MetricRegistry.name("shadow-pgsql", "query", "unnamed", "prepare"));
-        this.unnamedExecuteTimer = mr.timer(MetricRegistry.name("shadow-pgsql", "query", "unnamed", "execute"));
+        this.connectTimer = metricRegistry.timer(MetricRegistry.name("shadow-pgsql", "connect"));
+        this.preparedCounter = metricRegistry.counter(MetricRegistry.name("shadow-pgsql", "prepared"));
+        this.unnamedPrepareTimer = metricRegistry.timer(MetricRegistry.name("shadow-pgsql", "query", "unnamed", "prepare"));
+        this.unnamedExecuteTimer = metricRegistry.timer(MetricRegistry.name("shadow-pgsql", "query", "unnamed", "execute"));
     }
 
     public static Database setup(String host, int port, String user, String databaseName) throws IOException {
@@ -112,19 +108,20 @@ public class Database {
         // fetch schema related things
         try (Connection con = connect()) {
 
-            SimpleQuery pg_types = new SimpleQuery("SELECT oid, typname FROM pg_type");
-            pg_types.setName("schema.types");
-            pg_types.setRowBuilder(Helpers.ROW_AS_LIST);
-            pg_types.setResultBuilder(
-                    new RowProcessor<List>() {
-                        @Override
-                        public void process(List row) {
-                            int oid = (int) row.get(0);
-                            String name = (String) row.get(1);
-                            oid2name.put(oid, name);
-                            name2oid.put(name, oid);
-                        }
-                    });
+            SQL pg_types = SQL.query("SELECT oid, typname FROM pg_type")
+                    .withName("schema.types")
+                    .buildRowsWith(Helpers.ROW_AS_LIST)
+                    .buildResultsWith(
+                            new RowProcessor<List>() {
+                                @Override
+                                public void process(List row) {
+                                    int oid = (int) row.get(0);
+                                    String name = (String) row.get(1);
+                                    oid2name.put(oid, name);
+                                    name2oid.put(name, oid);
+                                }
+                            })
+                    .create();
 
             int results = (int) con.queryWith(pg_types);
 
@@ -132,7 +129,7 @@ public class Database {
                 throw new IllegalStateException("no types?");
             }
 
-            SimpleQuery schema = new SimpleQuery("SELECT" +
+            SQL schema = SQL.query("SELECT" +
                     "  a.attname," + // column name
                     "  a.attnum," + // column index
                     "  b.oid," + // table oid
@@ -143,26 +140,26 @@ public class Database {
                     " WHERE b.relkind = 'r'" +
                     " AND a.attnum > 0" +
                     " AND b.relname NOT LIKE 'pg_%'" +
-                    " AND b.relname NOT LIKE 'sql_%'"
-            );
-            schema.setName("schema.names");
-            schema.setRowBuilder(Helpers.ROW_AS_LIST);
-            schema.setResultBuilder(
-                    new RowProcessor<List>() {
-                        @Override
-                        public void process(List row) {
-                            String colName = (String) row.get(0);
-                            short colIndex = (short) row.get(1);
-                            int tableOid = (int) row.get(2);
-                            String tableName = (String) row.get(3);
+                    " AND b.relname NOT LIKE 'sql_%'")
+                    .withName("schema.names")
+                    .buildRowsWith(Helpers.ROW_AS_LIST)
+                    .buildResultsWith(
+                            new RowProcessor<List>() {
+                                @Override
+                                public void process(List row) {
+                                    String colName = (String) row.get(0);
+                                    short colIndex = (short) row.get(1);
+                                    int tableOid = (int) row.get(2);
+                                    String tableName = (String) row.get(3);
 
-                            columnNames.put(new ColumnByTableIndex(tableName, colIndex), colName);
+                                    columnNames.put(new ColumnByTableIndex(tableName, colIndex), colName);
 
-                            if (!oid2name.containsKey(tableOid)) {
-                                oid2name.put(tableOid, tableName);
-                            }
-                        }
-                    });
+                                    if (!oid2name.containsKey(tableOid)) {
+                                        oid2name.put(tableOid, tableName);
+                                    }
+                                }
+                            })
+                    .create();
 
             con.queryWith(schema);
         }

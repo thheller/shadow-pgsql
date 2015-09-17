@@ -21,7 +21,7 @@ public class DatabaseConfig {
     SSLContext sslContext = null;
     boolean fetchSchema = true;
 
-    MetricRegistry metricRegistry = null;
+    MetricRegistry metricRegistry = new MetricRegistry();
     MetricCollector metricCollector = new VoidCollector();
 
     public static final class VoidCollector implements MetricCollector {

@@ -43,7 +43,6 @@ public class Connection implements AutoCloseable {
         this.state = ConnectionState.CONNECTED;
     }
 
-
     public String getParameterValue(String key) {
         return this.parameters.get(key);
     }
@@ -195,48 +194,41 @@ public class Connection implements AutoCloseable {
         this.simpleStatement("ROLLBACK");
     }
 
-    public Object queryWith(String query, Object... params) throws IOException {
-        return query(new SimpleQuery(query), Arrays.asList(params));
+    public Object queryWith(SQL sql, Object... params) throws IOException {
+        return query(sql, Arrays.asList(params));
     }
 
-    public Object queryWith(Query query, Object... params) throws IOException {
-        return query(query, Arrays.asList(params));
+    public Object query(SQL sql, List<Object> params) throws IOException {
+        try (PreparedSQL stmt = prepare(sql)) {
+            return stmt.query(params);
+        }
     }
 
-    public Object query(Query query, List<Object> params) throws IOException {
-        try (PreparedQuery stmt = prepareQuery(query)) {
+    public Object executeWith(SQL sql, Object... params) throws IOException {
+        return execute(sql, Arrays.asList(params));
+    }
+
+    public StatementResult execute(SQL sql, List params) throws IOException {
+        try (PreparedSQL stmt = prepare(sql)) {
             return stmt.execute(params);
         }
     }
 
-    public StatementResult executeWith(String statement, Object... params) throws IOException {
-        return execute(new SimpleStatement(statement), Arrays.asList(params));
-    }
+    public PreparedSQL prepare(SQL sql) throws IOException {
+        Timer.Context timerContext = startPrepareTimer(sql.getName());
 
-    public StatementResult execute(Statement statement, List params) throws IOException {
-        try (PreparedStatement stmt = prepare(statement)) {
-            return stmt.execute(params);
-        }
-    }
-
-    public PreparedStatement prepare(String statement) throws IOException {
-        return prepare(new SimpleStatement(statement));
-    }
-
-    public PreparedStatement prepare(Statement statement) throws IOException {
-        Timer.Context timerContext = startPrepareTimer(statement.getName());
-
-        final List<TypeHandler> typeHints = statement.getParameterTypes();
+        final List<TypeHandler> typeHints = sql.getParameterTypes();
 
         final String statementId = String.format("s%d", queryId++);
 
-        writeParseDescribeSync(statement.getSQLString(), typeHints, statementId);
+        writeParseDescribeSync(sql.getSQLString(), typeHints, statementId);
 
-        int[] paramInfo = null;
-        boolean parsed = false;
-        boolean rowDescription = false;
+        int[] paramInfo = null; // created by 't'
+        ColumnInfo[] columnInfos = null; // created by 'T'
+        boolean parsed = false; // set by '1'
+        boolean noData = false; // set by 'n'
 
-        // success flow usually is 1/t/n/Z
+        // success flow usually is 1/t/(n|T)/Z
 
         Map<String, String> errorData = null;
 
@@ -258,12 +250,12 @@ public class Connection implements AutoCloseable {
                 }
                 case 'T': // RowDescription
                 {
-                    input.readRowDescription();
-                    rowDescription = true;
+                    columnInfos = input.readRowDescription();
                     break;
                 }
                 case 'n': // NoData
                 {
+                    noData = true;
                     break;
                 }
                 case 'Z': // ReadyForQuery
@@ -287,26 +279,48 @@ public class Connection implements AutoCloseable {
             if (parsed) {
                 throw new IllegalStateException("Error but Parsed!");
             }
-            throw new CommandException(String.format("Failed to prepare Statement\nSQL: %s", statement.getSQLString()), errorData);
+            throw new CommandException(String.format("Failed to prepare Statement\nsql: %s", sql.getSQLString()), errorData);
         }
 
+
         try {
-            // FIXME: check if we got NoData?
-            if (!parsed || paramInfo == null) {
-                throw new IllegalStateException("backend did not send ParseComplete, ParameterDescription");
+            final TypeHandler[] encoders = getParamTypes(paramInfo, typeHints, sql.getTypeRegistry());
+
+            db.metricCollector.collectPrepareTime(sql.getName(), sql.getSQLString(), timerContext.stop());
+
+            if (noData) {
+                if (!parsed || paramInfo == null) {
+                    throw new IllegalStateException("backend did not send ParseComplete, ParameterDescription");
+                }
+
+                if (sql.expectsData()) {
+                    throw new IllegalStateException("backend will not send data, use statement instead of query when defining your SQL");
+                }
+
+                return new PreparedSQL(this, statementId, encoders, sql);
+            } else {
+                if (!parsed || paramInfo == null || columnInfos == null) {
+                    throw new IllegalStateException("backend did not send ParseComplete, ParameterDescription and RowDescription");
+                }
+
+                if (!sql.expectsData()) {
+                    throw new IllegalStateException("backend will send data, use query instead of statement when defining your SQL");
+                }
+
+                TypeHandler[] decoders = new TypeHandler[columnInfos.length];
+
+                for (int i = 0; i < columnInfos.length; i++) {
+                    ColumnInfo f = columnInfos[i];
+                    decoders[i] = sql.getTypeRegistry().getTypeHandlerForField(db, f);
+                }
+
+                ResultBuilder resultBuilder = sql.getResultBuilder().create(columnInfos);
+                RowBuilder rowBuilder = sql.getRowBuilder().create(columnInfos);
+
+                return new PreparedSQL(this, statementId, encoders, sql, columnInfos, decoders, resultBuilder, rowBuilder);
             }
-
-            if (rowDescription) {
-                throw new CommandException(String.format("%s returns rows, use a Query", statement.getSQLString()));
-            }
-
-            final TypeHandler[] encoders = getParamTypes(paramInfo, typeHints, statement.getTypeRegistry());
-
-            db.metricCollector.collectPrepareTime(statement.getName(), statement.getSQLString(), timerContext.stop());
-
-            return new PreparedStatement(this, statementId, encoders, statement);
         } catch (Exception e) {
-            // FIXME: this might also throw!
+            // FIXME: this might also throw and e will be lost
             closeStatement(statementId);
             throw e;
         }
@@ -341,106 +355,6 @@ public class Connection implements AutoCloseable {
         }
 
         return prepareTimer.time();
-    }
-
-    public PreparedQuery prepareQuery(Query query) throws IOException {
-        Timer.Context timerContext = startPrepareTimer(query.getName());
-
-        final List<TypeHandler> typeHints = query.getParameterTypes();
-
-        final String statementId = String.format("s%d", queryId++);
-        writeParseDescribeSync(query.getSQLString(), typeHints, statementId);
-
-        int[] paramInfo = null;
-        ColumnInfo[] columnInfos = null;
-        boolean parsed = false;
-
-        // success flow usually is 1/t/T/Z
-        Map<String, String> errorData = null;
-        boolean noData = false;
-
-        PREPARE_LOOP:
-        while (true) {
-            final char type = input.readNextCommand();
-
-            switch (type) {
-                case '1': // ParseComplete
-                {
-                    input.checkSize("ParseComplete", 0);
-                    parsed = true;
-                    break;
-                }
-                case 't': // ParameterDescription
-                {
-                    paramInfo = input.readParameterDescription();
-                    break;
-                }
-                case 'T': // RowDescription
-                {
-                    columnInfos = input.readRowDescription();
-                    break;
-                }
-                case 'Z': // ReadyForQuery
-                {
-                    input.readReadyForQuery();
-                    break PREPARE_LOOP;
-                }
-                case 'E': // Error
-                {
-                    errorData = input.readMessages();
-                    break;
-                }
-                case 'n': // NoData
-                {
-                    noData = true;
-                    break;
-                }
-                default:
-                    throw new IllegalStateException(String.format("protocol violation, received '%s' after Parse", type));
-            }
-        }
-
-        if (errorData != null) {
-            // FIXME: I don't assume this will happen.
-            if (parsed) {
-                throw new IllegalStateException("Error but Parsed!");
-            }
-
-            throw new CommandException(String.format("Failed to prepare Query\nSQL: %s", query.getSQLString()), errorData);
-        }
-
-        try {
-            if (noData) {
-                throw new CommandException("Query does not return data, use a Statement");
-            }
-
-            if (!parsed || paramInfo == null || columnInfos == null) {
-                throw new IllegalStateException("backend did not send ParseComplete, ParameterDescription and RowDescription");
-            }
-
-            final TypeHandler[] encoders = getParamTypes(paramInfo, typeHints, query.getTypeRegistry());
-
-            RowBuilder rowBuilder = query.createRowBuilder(columnInfos);
-            ResultBuilder resultBuilder = query.createResultBuilder(columnInfos);
-
-            TypeHandler[] decoders = new TypeHandler[columnInfos.length];
-
-            for (int i = 0; i < columnInfos.length; i++) {
-                ColumnInfo f = columnInfos[i];
-                decoders[i] = query.getTypeRegistry().getTypeHandlerForField(db, f);
-            }
-
-            db.metricCollector.collectPrepareTime(query.getName(), query.getSQLString(), timerContext.stop());
-
-            return new PreparedQuery(this, statementId, encoders, query, columnInfos, decoders, resultBuilder, rowBuilder);
-        } catch (Exception e) {
-            try {
-                closeStatement(statementId);
-            } catch (Exception e2) {
-                // FIXME: what is correct here?
-            }
-            throw e;
-        }
     }
 
     private void writeParseDescribeSync(String query, List<TypeHandler> typeHints, String statementId) throws IOException {

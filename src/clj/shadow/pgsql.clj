@@ -2,17 +2,18 @@
   (:import [java.time OffsetDateTime]
            [shadow.pgsql
             Database
+            DatabaseConfig
             DatabasePool
+            DatabaseTask
             Connection
-            Query
-            Statement
+            SQL SQL$Builder
             TypeHandler
             TypeRegistry
-            RowBuilder
-            ResultBuilder
+            RowBuilder RowBuilder$Factory
+            ResultBuilder ResultBuilder$Factory
             ColumnInfo
             Helpers
-            SimpleQuery PreparedStatement PreparedQuery DatabaseTask DatabaseConfig]
+            PreparedSQL]
            [shadow.pgsql.types
             TypedArray
             ArrayReader
@@ -149,24 +150,25 @@
 (defn row->map-transform
   "returns row as map after calling (transform-fn map)"
   [transform-fn]
-  (fn [{:keys [column-naming] :as db} columns]
-    (let [column-names (->> columns
-                            (map #(.-name ^ColumnInfo %))
-                            (map #(from-sql-name column-naming %))
-                            (into []))]
-      (ClojureMapBuilder. column-names transform-fn))))
+  (fn [{:keys [column-naming] :as db}]
+    (reify
+      RowBuilder$Factory
+      (create [_ columns]
+        (let [column-names (->> columns
+                                (map #(.-name ^ColumnInfo %))
+                                (map #(from-sql-name column-naming %))
+                                (into []))]
+          (ClojureMapBuilder. column-names transform-fn))))))
 
 (def row->map
   (row->map-transform identity))
 
-(defn row->one-column
-  "row is returned as the value of the first (only) column"
-  [db columns]
+(def ^{:doc "row is returned as the value of the first (only) column"}
+  row->one-column
   Helpers/ONE_COLUMN)
 
-(defn result->one-row
-  "result is return as nil or row"
-  [db columns]
+(def ^{:doc "result is return as nil or row"}
+  result->one-row
   Helpers/ONE_ROW)
 
 (defn now []
@@ -357,90 +359,79 @@ keyword-type
       (complete [_ m]
         (persistent! m)))))
 
-(deftype ClojureStatement [db name sql params types]
-  Statement
-  (getName [_]
-    name)
+(defn- set-common-builder-args [db args ^SQL$Builder builder]
+  (when-let [name (:name args)]
+    (.withName builder name))
 
-  (getSQLString [_]
-    sql)
+  (when-let [params (:params args)]
+    (.withParamTypes builder params))
 
-  (getParameterTypes [_]
-    params)
+  (.withTypeRegistry builder (or (:types args)
+                                 (:types db)
+                                 TypeRegistry/DEFAULT)))
 
-  (getTypeRegistry [_]
-    types))
-
-(deftype ClojureQuery [db name sql params types result-builder row-builder]
-  Query
-  (getName [_]
-    name)
-
-  (getSQLString [_]
-    sql)
-
-  (getParameterTypes [_]
-    params)
-
-  (getTypeRegistry [_]
-    types)
-
-  (createResultBuilder [_ columns]
-    (if (fn? result-builder)
-      (result-builder db columns)
-      result-builder))
-
-  (createRowBuilder [_ columns]
-    (if (fn? row-builder)
-      (row-builder db columns)
-      row-builder)))
-
-(defn ^Query as-query [db args]
+(defn- ^SQL$Builder set-row-builder [^SQL$Builder builder rbf db]
   (cond
-    (string? args)
-    (ClojureQuery. db nil args [] (:types db) result->vec row->map)
-
-    (map? args)
-    (let [{:keys [sql name params types result row]} args]
-      (ClojureQuery. db
-                     name
-                     sql
-                     (or params [])
-                     (or types
-                         (:types db)
-                         TypeRegistry/DEFAULT)
-                     (or result result->vec)
-                     (or row row->map)))
-
-    (instance? Query args)
-    args
-
+    (instance? RowBuilder rbf)
+    (.buildRowsWith builder ^RowBuilder rbf)
+    (instance? RowBuilder$Factory rbf)
+    (.withRowBuilder builder ^RowBuilder$Factory rbf)
+    (fn? rbf)
+    (.withRowBuilder builder ^RowBuilder$Factory (rbf db))
     :else
-    (throw (ex-info "cannot build query from args" {:args args}))))
+    (throw (ex-info "invalid :row builder, expected RowBuilder, RowBuilder$Factory or fn" {:given rbf}))))
 
-(defn ^Statement as-statement [db args]
+(defn- ^SQL$Builder set-result-builder [^SQL$Builder builder rbf db]
   (cond
-    (string? args)
-    (ClojureStatement. db nil args [] (:types db))
+    (instance? ResultBuilder rbf)
+    (.buildResultsWith builder ^ResultBuilder rbf)
+    (instance? ResultBuilder$Factory rbf)
+    (.withResultBuilder builder ^ResultBuilder$Factory rbf)
+    (fn? rbf)
+    (.withResultBuilder builder ^ResultBuilder$Factory (rbf db))
+    :else
+    (throw (ex-info "invalid :result builder, expected ResultBuilder, ResultBuilder$Factory or fn" {:given rbf}))))
 
-    (map? args)
-    (let [{:keys [sql name params types]} args]
-      (ClojureStatement. db
-                         name
-                         sql
-                         (or params [])
-                         (or types
-                             (:types db)
-                             TypeRegistry/DEFAULT)))
-
-    (instance? Statement args)
+(defn ^SQL as-query [db args]
+  (if (instance? SQL args)
     args
-    ))
+    (let [[sql-string args] (cond
+                              (string? args)
+                              [args {}]
+                              (map? args)
+                              [(:sql args) args]
+                              :else
+                              (throw (ex-info "cannot build SQL from args" {:args args})))
+          builder (SQL/query sql-string)]
+
+
+      (set-row-builder builder (:row args row->map) db)
+      (set-result-builder builder (:result args result->vec) db)
+
+      (.create builder))))
+
+(defn ^SQL as-statement [db args]
+  (if (instance? SQL args)
+    args
+    (let [[sql-string args] (cond
+                              (string? args)
+                              [args {}]
+
+                              (map? args)
+                              [(:sql args) args]
+
+                              :else
+                              (throw (ex-info "cannot build SQL from args" {:args args})))
+          builder (SQL/statement sql-string)]
+      (set-common-builder-args db args builder)
+
+      (.create builder)
+      )))
 
 (defn prepare-query [db stmt]
   (let [connection (get-connection db)
         query (as-query db stmt)
-        ^PreparedQuery prep (.prepareQuery connection query)]
+        ^PreparedSQL prep (.prepare connection query)]
 
     (reify
       java.lang.AutoCloseable
@@ -453,25 +444,25 @@ keyword-type
 
       clojure.lang.IFn
       (invoke [_ p1]
-        (.execute prep [p1]))
+        (.query prep [p1]))
       (invoke [_ p1 p2]
-        (.execute prep [p1 p2]))
+        (.query prep [p1 p2]))
       (invoke [_ p1 p2 p3]
-        (.execute prep [p1 p2 p3]))
+        (.query prep [p1 p2 p3]))
       (invoke [_ p1 p2 p3 p4]
-        (.execute prep [p1 p2 p3 p4]))
+        (.query prep [p1 p2 p3 p4]))
       (invoke [_ p1 p2 p3 p4 p5]
-        (.execute prep [p1 p2 p3 p4 p5]))
+        (.query prep [p1 p2 p3 p4 p5]))
       (invoke [_ p1 p2 p3 p4 p5 p6]
-        (.execute prep [p1 p2 p3 p4 p5 p6]))
+        (.query prep [p1 p2 p3 p4 p5 p6]))
       (invoke [_ p1 p2 p3 p4 p5 p6 p7]
-        (.execute prep [p1 p2 p3 p4 p5 p6 p7]))
+        (.query prep [p1 p2 p3 p4 p5 p6 p7]))
       (invoke [_ p1 p2 p3 p4 p5 p6 p7 p8]
-        (.execute prep [p1 p2 p3 p4 p5 p6 p7 p8]))
+        (.query prep [p1 p2 p3 p4 p5 p6 p7 p8]))
       (invoke [_ p1 p2 p3 p4 p5 p6 p7 p8 p9]
-        (.execute prep [p1 p2 p3 p4 p5 p6 p7 p8 p9]))
+        (.query prep [p1 p2 p3 p4 p5 p6 p7 p8 p9]))
       (invoke [_ p1 p2 p3 p4 p5 p6 p7 p8 p9 p10]
-        (.execute prep [p1 p2 p3 p4 p5 p6 p7 p8 p9 p10]))
+        (.query prep [p1 p2 p3 p4 p5 p6 p7 p8 p9 p10]))
       )))
 
 (defn query
@@ -505,7 +496,8 @@ keyword-type
         row-builder (or row-builder sql/row->map)
 
         column-names (->> columns
-                          (map #(to-sql-name column-naming %)))
+                          (map #(to-sql-name column-naming %))
+                          (into []))
 
         param-types (->> column-names
                          (map #(.getTypeHandlerForColumn types table-name %))
@@ -536,16 +528,22 @@ keyword-type
                  ") RETURNING "
                  (str/join ", " returning-names)) ;; already quoted if needed
 
-        ;; FIXME: find a way to specify the query name
-        query (ClojureQuery. db (str "insert." table-name) sql param-types types result-builder row-builder)]
+        query (-> (SQL/query sql)
+                  ;; FIXME: find a way to specify the query name
+                  (.withName (str "insert." table-name))
+                  (.withParamTypes param-types)
+                  (.withTypeRegistry types)
+                  (set-row-builder row-builder db)
+                  (set-result-builder result-builder db)
+                  (.create))]
 
     (with-transaction db
-      (with-open [prep (.prepareQuery (get-connection db) query)]
+      (with-open [prep (.prepare (get-connection db) query)]
         (if returning?
           (->> data
                (reduce (fn [result row]
                          (let [params (columns-fn row columns)
-                               row-result (.execute prep params)]
+                               row-result (.query prep params)]
                            (conj! result (merge-fn row row-result))))
                        (transient []))
                (persistent!))
@@ -611,7 +609,7 @@ keyword-type
 (defn prepare [db stmt]
   (let [connection (get-connection db)
         stmt (as-statement db stmt)
-        ^PreparedStatement prep (.prepare connection stmt)]
+        ^PreparedSQL prep (.prepare connection stmt)]
 
     (reify
       java.lang.AutoCloseable
@@ -739,7 +737,7 @@ keyword-type
   (let [db-config (doto (DatabaseConfig. host port)
                     (.setUser user)
                     (.setDatabase database)
-                    (.setMetricRegistry metric-registry) )
+                    (.setMetricRegistry metric-registry))
         _ (when metric-collector
             (.setMetricCollector db-config metric-collector))
         db (.get db-config)
