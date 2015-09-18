@@ -234,7 +234,7 @@ public class PreparedSQL implements AutoCloseable {
                     }
                 }
             } catch (Exception e) {
-                throw new IllegalArgumentException(String.format("Failed to encode parameter $%d [%s]\nsql: %s", i + 1, param, sql.getSQLString()), e);
+                throw new IllegalArgumentException(String.format("Failed to encode parameter $%d [%s -> \"%s\"]\nsql: %s", i + 1, encoder.getClass().getName(), param, sql.getSQLString()), e);
             }
         }
 

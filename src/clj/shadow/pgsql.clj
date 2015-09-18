@@ -18,7 +18,8 @@
             TypedArray
             ArrayReader
             Text
-            Text$Conversion Types HStore$Handler HStore])
+            Text$Conversion Types HStore$Handler HStore]
+           (clojure.lang PersistentArrayMap))
 
   (:require [clojure.string :as str]
             [clojure.edn :as edn]
@@ -105,13 +106,25 @@
     (transient {}))
 
   (add [_ state column-info col-index col-value]
-    ;; FIXME: do I want {:some-column nil} in my map?
-    (if (nil? col-value)
-      state
-      (assoc! state (nth column-names col-index) col-value)))
+    (assoc! state (nth column-names col-index) col-value))
 
   (complete [_ state]
     (transform-fn (persistent! state))))
+
+(deftype ClojureArrayMapBuilder [size column-names transform-fn]
+  RowBuilder
+  (init [_]
+    (object-array size))
+
+  (add [_ state column-info col-index col-value]
+    (let [idx (* 2 col-index)]
+      (aset ^objects state idx (nth column-names col-index))
+      (aset ^objects state (inc idx) col-value)
+      state))
+
+  (complete [_ state]
+    (transform-fn (PersistentArrayMap. ^objects state))
+    ))
 
 (def result->vec
   (reify
@@ -154,21 +167,26 @@
     (reify
       RowBuilder$Factory
       (create [_ columns]
-        (let [column-names (->> columns
+        (let [count (alength columns)
+              column-names (->> columns
                                 (map #(.-name ^ColumnInfo %))
                                 (map #(from-sql-name column-naming %))
                                 (into []))]
-          (ClojureMapBuilder. column-names transform-fn))))))
+          (if (<= count 8) ;; PersistentArrayMap.HASHTABLE_THRESHOLD/2 (not accessible from here)
+            ;; array map builder only allocates one array per row and later wraps that into a PersistentArrayMap
+            (ClojureArrayMapBuilder. (* count 2) column-names transform-fn)
+            ;; uses transients but that will create/copy with each new pair, lots of garbage
+            (ClojureMapBuilder. column-names transform-fn)))))))
 
 (def row->map
   (row->map-transform identity))
 
 (def ^{:doc "row is returned as the value of the first (only) column"}
-  row->one-column
+row->one-column
   Helpers/ONE_COLUMN)
 
 (def ^{:doc "result is return as nil or row"}
-  result->one-row
+result->one-row
   Helpers/ONE_ROW)
 
 (defn now []
@@ -359,7 +377,7 @@ keyword-type
       (complete [_ m]
         (persistent! m)))))
 
-(defn- set-common-builder-args [db args ^SQL$Builder builder]
+(defn- ^SQL$Builder set-common-builder-args [^SQL$Builder builder db args]
   (when-let [name (:name args)]
     (.withName builder name))
 
@@ -401,14 +419,13 @@ keyword-type
                               (map? args)
                               [(:sql args) args]
                               :else
-                              (throw (ex-info "cannot build SQL from args" {:args args})))
-          builder (SQL/query sql-string)]
+                              (throw (ex-info "cannot build SQL from args" {:args args})))]
 
-
-      (set-row-builder builder (:row args row->map) db)
-      (set-result-builder builder (:result args result->vec) db)
-
-      (.create builder))))
+      (-> (SQL/query sql-string)
+          (set-common-builder-args db args)
+          (set-row-builder (:row args row->map) db)
+          (set-result-builder (:result args result->vec) db)
+          (.create)))))
 
 (defn ^SQL as-statement [db args]
   (if (instance? SQL args)
@@ -421,12 +438,11 @@ keyword-type
                               [(:sql args) args]
 
                               :else
-                              (throw (ex-info "cannot build SQL from args" {:args args})))
-          builder (SQL/statement sql-string)]
-      (set-common-builder-args db args builder)
+                              (throw (ex-info "cannot build SQL from args" {:args args})))]
 
-      (.create builder)
-      )))
+      (-> (SQL/statement sql-string)
+          (set-common-builder-args db args)
+          (.create)))))
 
 (defn prepare-query [db stmt]
   (let [connection (get-connection db)
@@ -549,7 +565,7 @@ keyword-type
                (persistent!))
           ;; do not accumulate a result unless requested
           (doseq [row data]
-            (.execute prep (columns-fn row columns)))
+            (.query prep (columns-fn row columns)))
           )))))
 
 (defn insert-one [db stmt data]

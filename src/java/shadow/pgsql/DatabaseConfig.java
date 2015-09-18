@@ -89,7 +89,9 @@ public class DatabaseConfig {
     }
 
     public void setMetricRegistry(MetricRegistry metricRegistry) {
-        this.metricRegistry = metricRegistry;
+        if (metricRegistry != null) {
+            this.metricRegistry = metricRegistry;
+        }
     }
 
     public DatabaseConfig noSchema() {

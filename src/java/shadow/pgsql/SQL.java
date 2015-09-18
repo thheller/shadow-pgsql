@@ -83,6 +83,34 @@ public final class SQL {
             this.sql = sql;
         }
 
+        public Type getType() {
+            return type;
+        }
+
+        public String getSQLString() {
+            return sql;
+        }
+
+        public String getName() {
+            return name;
+        }
+
+        public TypeRegistry getTypeRegistry() {
+            return typeRegistry;
+        }
+
+        public ResultBuilder.Factory getResultBuilder() {
+            return resultBuilder;
+        }
+
+        public RowBuilder.Factory getRowBuilder() {
+            return rowBuilder;
+        }
+
+        public List<TypeHandler> getParamTypes() {
+            return paramTypes;
+        }
+
         public Builder withName(String name) {
             this.name = name;
             return this;

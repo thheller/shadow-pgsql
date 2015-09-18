@@ -55,8 +55,9 @@
 
     (pprint (sql/query db "SELECT atext FROM array_types"))
 
-    (pprint (sql/query db {:sql "SELECT atext FROM array_types WHERE atext @> ARRAY[$1]"
-                           :params [sql/keyword-type]}
+    (pprint (sql/query db
+                       {:sql "SELECT atext FROM array_types WHERE atext @> ARRAY[$1]"
+                        :params [sql/keyword-type]}
                        [:clojure]))
 
     ))
