@@ -15,7 +15,12 @@ public class StatementResult {
     }
 
     public int getRowsAffected() {
-        return Integer.parseInt(tag.substring(tag.lastIndexOf(" ") + 1));
+        int i = tag.lastIndexOf(" ");
+        if (i != -1) {
+            return Integer.parseInt(tag.substring(i + 1));
+        } else {
+            return 0;
+        }
     }
 
     @Override

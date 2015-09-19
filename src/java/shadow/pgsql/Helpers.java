@@ -1,9 +1,6 @@
 package shadow.pgsql;
 
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by zilence on 10.08.14.
@@ -18,6 +15,24 @@ public class Helpers {
         @Override
         public List add(List state, Object row) {
             state.add(row);
+            return state;
+        }
+
+        @Override
+        public List complete(List state) {
+            return state;
+        }
+    };
+
+    public static final ResultBuilder RESULT_AS_LINKED_LIST = new ResultBuilder<List, List, Object>() {
+        @Override
+        public List init() {
+            return new LinkedList();
+        }
+
+        @Override
+        public List add(List state, Object o) {
+            state.add(o);
             return state;
         }
 
