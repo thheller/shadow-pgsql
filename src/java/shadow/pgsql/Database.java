@@ -7,6 +7,7 @@ import shadow.pgsql.utils.RowProcessor;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.Socket;
 import java.nio.ByteBuffer;
 import java.nio.channels.SocketChannel;
 import java.util.HashMap;
@@ -39,6 +40,12 @@ public class Database {
     final MetricCollector metricCollector;
 
     public Database(DatabaseConfig config) {
+        if (config.getHost() == null) {
+            throw new IllegalArgumentException("host cannot be null");
+        }
+        if (config.getConnectParam("user") == null) {
+            throw new IllegalArgumentException("user cannot be null");
+        }
         this.config = config;
         this.metricRegistry = config.getMetricRegistry();
         this.metricCollector = config.metricCollector;
@@ -68,10 +75,10 @@ public class Database {
 
         Timer.Context timerContext = connectTimer.time();
 
-        SocketChannel channel = SocketChannel.open(new InetSocketAddress(config.host, config.port));
-        channel.configureBlocking(true);
-
         if (config.ssl) {
+            SocketChannel channel = SocketChannel.open(new InetSocketAddress(config.host, config.port));
+            channel.configureBlocking(true);
+
             // http://www.postgresql.org/docs/9.0/static/protocol-flow.html#AEN84692
 
             ByteBuffer buf = ByteBuffer.allocate(8);
@@ -93,7 +100,11 @@ public class Database {
 
             io = SSLSocketIO.start(channel, config.sslContext, config.host, config.port);
         } else {
-            io = new SocketIO(channel);
+            //SocketChannel channel = SocketChannel.open(new InetSocketAddress(config.host, config.port));
+            //channel.configureBlocking(true);
+            //io = new SocketIO(channel);
+
+            io = new StreamIO(new Socket(config.host, config.port));
         }
 
         pg = new Connection(this, io);

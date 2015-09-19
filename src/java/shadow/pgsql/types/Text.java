@@ -84,7 +84,7 @@ public class Text implements TypeHandler {
         buf.get(bytes);
 
         // FIXME: utf-8
-        return conversion.decode(new String(bytes));
+        return conversion.decode(new String(bytes, 0, size, "UTF-8"));
     }
 
     @Override

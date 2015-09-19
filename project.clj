@@ -10,6 +10,13 @@
   :java-source-paths ["src/java"]
   :source-paths ["src/clj"]
 
-  :profiles {:dev {:source-paths ["src/dev"]
+  :profiles {:dev {:source-paths ["src/dev"
+                                  "src/benchmark"]
                    :dependencies [[org.clojure/clojure "1.7.0"]
-                                  [org.clojure/tools.namespace "0.2.4"]]}})
+                                  [org.clojure/tools.namespace "0.2.4"]]}
+
+             :benchmark {:source-paths ["src/benchmark"]
+                         :java-source-paths ["src/benchmark"]
+                         :dependencies [[org.clojure/clojure "1.7.0"]
+                                        [criterium "0.4.3"]
+                                        [org.postgresql/postgresql "9.4-1203-jdbc42"]]}})

@@ -4,10 +4,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Primary Inteface to talk to the backend, usually obtained via Database
@@ -196,6 +193,10 @@ public class Connection implements AutoCloseable {
 
     public Object queryWith(SQL sql, Object... params) throws IOException {
         return query(sql, Arrays.asList(params));
+    }
+
+    public Object query(SQL sql) throws IOException {
+        return query(sql, new ArrayList());
     }
 
     public Object query(SQL sql, List<Object> params) throws IOException {
