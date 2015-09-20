@@ -100,11 +100,11 @@ public class Database {
 
             io = SSLSocketIO.start(channel, config.sslContext, config.host, config.port);
         } else {
-            //SocketChannel channel = SocketChannel.open(new InetSocketAddress(config.host, config.port));
-            //channel.configureBlocking(true);
-            //io = new SocketIO(channel);
+            SocketChannel channel = SocketChannel.open(new InetSocketAddress(config.host, config.port));
+            channel.configureBlocking(true);
+            io = new SocketIO(channel);
 
-            io = new StreamIO(new Socket(config.host, config.port));
+            // io = new StreamIO(new Socket(config.host, config.port));
         }
 
         pg = new Connection(this, io);
