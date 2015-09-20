@@ -1,8 +1,13 @@
 package shadow.pgsql.benchmark;
 
+import com.codahale.metrics.ConsoleReporter;
+import com.codahale.metrics.MetricRegistry;
+import com.codahale.metrics.Timer;
+
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Created by zilence on 19.09.15.
@@ -56,14 +61,36 @@ public class JDBCBenchmark implements AutoCloseable {
     public static void main(String[] args) throws Exception {
         JDBCBenchmark bench = new JDBCBenchmark("blubb");
 
+        MetricRegistry mr = new MetricRegistry();
+        Timer timer = mr.timer("benchmark");
+
         System.out.println("Press any key to start.");
         System.in.read();
-        for (int i = 0; i < 100; i++) {
-            List<DatPojo> pojos = bench.selectPojos();
-            System.out.format("got %d pojos\n", pojos.size());
+        System.out.println("Warmup");
+        for (int i = 0; i < 1000; i++) {
+            bench.selectPojos();
+        }
+
+        System.out.println("Looping");
+        for (int i = 0; i < 3000; i++) {
+            Timer.Context t = timer.time();
+            List pojos = bench.selectPojos();
+
+            long duration = t.stop();
+            //System.out.format("got %d pojos\n", pojos.size());
+            if (i % 100 == 0) {
+                System.out.format("run: %d duration: %d\n", i, duration);
+            }
         }
         System.out.println("Completed press any key to quit");
         System.in.read();
         bench.close();
+
+        ConsoleReporter report = ConsoleReporter.forRegistry(mr)
+                .convertRatesTo(TimeUnit.SECONDS)
+                .convertDurationsTo(TimeUnit.MILLISECONDS)
+                .build();
+
+        report.report();
     }
 }

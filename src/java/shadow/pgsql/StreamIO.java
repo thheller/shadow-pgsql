@@ -11,7 +11,7 @@ public class StreamIO implements IO {
 
     private final Socket socket;
     private BufferedOutputStream out;
-    private InputStream in;
+    private BufferedInputStream in;
 
     private static final int CHUNK_SIZE = 8192;
     private final byte[] chunk = new byte[CHUNK_SIZE];
@@ -34,10 +34,9 @@ public class StreamIO implements IO {
     public void recv(ByteBuffer buf) throws IOException {
 
         while (buf.hasRemaining()) {
-            // reading in chunks is about twice as fast as read/put each byte
-            // still requires BufferedInputStream, about 5 times slower without
-            // don't know why BufferedInputStream is so much faster since we are basically doing the same thing again?
-            // FIXME: WTF?
+            // BufferedInputStream already buffers but it will buffer multiple frames
+            // could write custom BufferedInputStream that provides better way to transfer into ByteBuffer
+            // but at this point this seems like overkill
             int bytesToRead = Math.min(buf.remaining(), CHUNK_SIZE);
             int bytesRead = in.read(chunk, 0, bytesToRead);
 
