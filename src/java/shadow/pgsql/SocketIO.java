@@ -58,9 +58,10 @@ public class SocketIO implements IO {
         while (true) {
             transfer(buf);
 
-            if (buf.hasRemaining()) {
+            int remaining = buf.remaining();
+            if (remaining > 0) {
                 // read directly into target if we need more than recvBuffer can take
-                if (buf.remaining() > recvBuffer.capacity()) {
+                if (remaining > recvBuffer.capacity()) {
                     if (channel.read(buf) < 0) {
                         throw new EOFException();
                     }

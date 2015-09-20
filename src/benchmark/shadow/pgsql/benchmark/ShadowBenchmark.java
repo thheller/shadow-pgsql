@@ -19,7 +19,7 @@ public class ShadowBenchmark implements AutoCloseable {
 
     private static final SQL SELECT_POJOS = SQL.query("SELECT * FROM pojos")
             .withName("benchmark")
-            .buildResultsWith(Helpers.RESULT_AS_LINKED_LIST)
+            // .buildResultsWith(Helpers.RESULT_AS_LINKED_LIST)
             .buildRowsWith(ROW_TO_POJO)
             .create();
 
@@ -45,26 +45,27 @@ public class ShadowBenchmark implements AutoCloseable {
 
         Timer timer = bench.db.getMetricRegistry().timer("benchmark");
 
-        System.out.println("Press any key to start.");
-        System.in.read();
         System.out.println("Warmup");
         for (int i = 0; i < 1000; i++) {
             bench.selectPojos();
         }
 
+        System.out.println("Press any key to start.");
+        // System.in.read();
         System.out.println("Looping");
-        for (int i = 0; i < 3000; i++) {
+
+        for (int i = 0; i < 10000; i++) {
             Timer.Context t = timer.time();
             List pojos = bench.selectPojos();
 
             long duration = t.stop();
             //System.out.format("got %d pojos\n", pojos.size());
-            if (i % 100 == 0) {
+            if (i % 500 == 0) {
                 System.out.format("run: %d duration: %d\n", i, duration);
             }
         }
         System.out.println("Completed press any key to quit");
-        System.in.read();
+        //System.in.read();
         bench.close();
 
         ConsoleReporter report = ConsoleReporter.forRegistry(bench.db.getMetricRegistry())
