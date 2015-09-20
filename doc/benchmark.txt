@@ -91,7 +91,15 @@ Execution time sample std-deviation : 715.666732 µs
 100 rows
 -----------------------------------------------------------------------------------
 
+pgjdbc is faster here because it uses P/B/D/E/S (Parse/Bind/Describe/Execute/Sync) -> read response+rows
+shadow uses P/D/S -> read response -> B/E/S -> read rows
+if a query is executed multiple times this is faster
+if is also faster at a certain amount of rows
+if it is only executed once it is slower (because of the extra Sync I assume)
 
+might be worth to consider the pgjdbc approach to skip the extra Sync when executing once
+but this is fast enough I guess
+-----------------------------------------------------------------------------------
 
 
 zilence@mx2:~/install/shadow-pgsql$ java -cp target/shadow-pgsql-0.8.0-SNAPSHOT-standalone.jar clojure.main -m shadow.pgsql.benchmark.runner 100 java
