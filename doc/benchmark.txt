@@ -16,6 +16,8 @@ Execution time sample std-deviation : 78.876041 µs
 Found 3 outliers in 60 samples (5.0000 %)
 	low-severe	 3 (5.0000 %)
  Variance from outliers : 1.6389 % Variance is slightly inflated by outliers
+
+
 zilence@mx2:~/install/shadow-pgsql$ java -cp target/shadow-pgsql-0.8.0-SNAPSHOT-standalone.jar clojure.main -m shadow.pgsql.benchmark.runner 10000 pgjdbc
 ===== pgjdbc via java
 WARNING: Final GC required 1.187152416138892 % of runtime
@@ -35,6 +37,8 @@ Found 3 outliers in 60 samples (5.0000 %)
 	low-severe	 2 (3.3333 %)
 	low-mild	 1 (1.6667 %)
  Variance from outliers : 1.6389 % Variance is slightly inflated by outliers
+
+
 zilence@mx2:~/install/shadow-pgsql$ java -cp target/shadow-pgsql-0.8.0-SNAPSHOT-standalone.jar clojure.main -m shadow.pgsql.benchmark.runner 10000 clojure
 ===== shadow-pgsql via clojure
 WARNING: Final GC required 1.237765509738213 % of runtime
@@ -53,3 +57,18 @@ Execution time sample std-deviation : 75.600757 µs
 Found 3 outliers in 60 samples (5.0000 %)
 	low-severe	 3 (5.0000 %)
  Variance from outliers : 1.6389 % Variance is slightly inflated by outliers
+
+
+zilence@mx2:~/install/shadow-pgsql$ java -cp target/shadow-pgsql-0.8.0-SNAPSHOT-standalone.jar clojure.main -m shadow.pgsql.benchmark.runner 10000 clojure-jdbc
+===== clojure.java.jdbc
+amd64 Linux 2.6.32-5-amd64 8 cpu(s)
+Java HotSpot(TM) 64-Bit Server VM 25.60-b23
+Runtime arguments:
+Evaluation count : 1680 in 60 samples of 28 calls.
+      Execution time sample mean : 36.106801 ms
+             Execution time mean : 36.107401 ms
+Execution time sample std-deviation : 715.666732 µs
+    Execution time std-deviation : 725.892974 µs
+   Execution time lower quantile : 34.718400 ms ( 2.5%)
+   Execution time upper quantile : 37.408280 ms (97.5%)
+                   Overhead used : 1.539633 ns

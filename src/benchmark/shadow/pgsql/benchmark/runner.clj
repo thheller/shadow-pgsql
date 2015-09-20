@@ -1,6 +1,7 @@
 (ns shadow.pgsql.benchmark.runner
   (:require [shadow.pgsql :as sql]
-            [criterium.core :as crit])
+            [criterium.core :as crit]
+            [clojure.java.jdbc :as jdbc])
   (:import (shadow.pgsql.benchmark JDBCBenchmark ShadowBenchmark)))
 
 (set! *warn-on-reflection* true)
@@ -61,6 +62,19 @@
       (check-size (sql/query db "SELECT * FROM pojos") amount)
       :verbose)))
 
+(defn bench-clojure-jdbc [amount]
+  (let [db {:connection-uri "jdbc:postgresql://localhost:5432/shadow_bench"
+            :user "zilence"
+            :password ""}
+        con (jdbc/get-connection db)
+        db (assoc db :connection con)]
+
+    (crit/bench
+      (check-size
+        (jdbc/query db ["select * from pojos"])
+        amount)
+      :verbose)))
+
 
 (defn -main [amount which-one & args]
   (let [amount (Long/parseLong amount)]
@@ -69,6 +83,9 @@
       "pgjdbc"
       (do (println "===== pgjdbc via java")
           (bench-jdbc amount))
+      "clojure-jdbc"
+      (do (println "===== clojure.java.jdbc")
+          (bench-clojure-jdbc amount))
       "clojure"
       (do (println "===== shadow-pgsql via clojure")
           (bench-clojure amount))
