@@ -19,7 +19,7 @@ public class ProtocolInput {
     private final Connection pg;
     private final IO io;
 
-    private final ByteBuffer frame = ByteBuffer.allocateDirect(5); // 1 byte command, 4 byte size
+    private final ByteBuffer frame = ByteBuffer.allocate(5); // 1 byte command, 4 byte size
     private final ByteBuffer defaultBuffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
 
     public ByteBuffer current = defaultBuffer;

@@ -2,6 +2,7 @@ package shadow.pgsql.benchmark;
 
 import com.codahale.metrics.*;
 import shadow.pgsql.*;
+import shadow.pgsql.types.Types;
 
 import java.io.IOException;
 import java.util.List;
@@ -16,18 +17,19 @@ public class ShadowBenchmark implements AutoCloseable {
     private final Database db;
     private final Connection pg;
 
-    private static final RowBuilder ROW_TO_POJO = new DatPojoBuilder();
+    private final RowBuilder ROW_TO_POJO = new DatPojoBuilder();
 
-    private static final SQL SELECT_POJOS = SQL.query("SELECT * FROM pojos")
+    private final SQL SELECT_POJOS = SQL.query("SELECT test_int, test_string, test_double FROM pojos")
             .withName("benchmark")
             // .buildResultsWith(Helpers.RESULT_AS_LINKED_LIST)
             .buildRowsWith(ROW_TO_POJO)
             .create();
 
-    private static final SQL SELECT_ONE_POJO = SQL.query("SELECT * FROM pojos WHERE test_int = $1")
+    private final SQL SELECT_ONE_POJO = SQL.query("SELECT * FROM pojos WHERE test_int = $1")
             .withName("benchmark")
             .buildResultsWith(Helpers.ONE_ROW)
             .buildRowsWith(ROW_TO_POJO)
+            .addParameterType(Types.INT4)
             .create();
 
 
@@ -44,12 +46,10 @@ public class ShadowBenchmark implements AutoCloseable {
         return (DatPojo) pg.queryWith(SELECT_ONE_POJO, id);
     }
 
-
     @Override
     public void close() throws Exception {
         this.pg.close();
     }
-
 
     public static void main(String[] args) throws Exception {
         ShadowBenchmark bench = new ShadowBenchmark();
@@ -64,7 +64,7 @@ public class ShadowBenchmark implements AutoCloseable {
         }
 
         System.out.println("Press any key to start.");
-        // System.in.read();
+        System.in.read();
         System.out.println("Looping");
 
         for (int i = 0; i < 10000; i++) {
@@ -78,7 +78,7 @@ public class ShadowBenchmark implements AutoCloseable {
             }
         }
         System.out.println("Completed press any key to quit");
-        //System.in.read();
+        System.in.read();
         bench.close();
 
         ConsoleReporter report = ConsoleReporter.forRegistry(bench.db.getMetricRegistry())

@@ -189,7 +189,16 @@ public class ProtocolOutput {
         }
     }
 
-    void writeBind(TypeHandler[] paramEncoders, TypeHandler[] columnDecoders, List<Object> queryParams, SQL sql, String statementId, String portalId) {
+    void writeBind(TypeHandler[] paramEncoders, List<Object> queryParams, SQL sql, String statementId, String portalId, TypeHandler[] columnDecoders) {
+        short[] formatCodes = new short[columnDecoders.length];
+        for (int i = 0; i < formatCodes.length; i++) {
+            formatCodes[i] = (short) (columnDecoders[i].supportsBinary() ? 1 : 0);
+        }
+
+        writeBind(paramEncoders, queryParams, sql, statementId, portalId, formatCodes);
+    }
+
+    void writeBind(TypeHandler[] paramEncoders, List<Object> queryParams, SQL sql, String statementId, String portalId, short[] formatCodes) {
         // Bind
         beginCommand('B');
         string(portalId); // portal name (might be null)
@@ -230,9 +239,9 @@ public class ProtocolOutput {
             }
         }
 
-        int16((short) columnDecoders.length);
-        for (TypeHandler t : columnDecoders) {
-            int16((short) (t.supportsBinary() ? 1 : 0));
+        int16((short) formatCodes.length);
+        for (short formatCode : formatCodes) {
+            int16(formatCode);
         }
 
         complete();

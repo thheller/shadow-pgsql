@@ -1,16 +1,20 @@
 package shadow.pgsql;
 
+import shadow.pgsql.types.Int4;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Desribes your SQL string and how results should be handled, should then be prepared and executed via Connection.
- *
+ * <p/>
  * Contains information about parameter types
- *
+ * <p/>
  * Create with SQL.query or SQL.statement
- *
+ * <p/>
  * Query returns Data
  * Statement only returns the StatementResult (usually how many rows were affected)
  */
@@ -20,18 +24,22 @@ public final class SQL {
         STATEMENT
     }
 
+    private static final Pattern PARAM_PATTERN = Pattern.compile("\\$([0-9]+)", Pattern.MULTILINE | Pattern.DOTALL);
+
     private final Type type;
     private final String name;
     private final String sql;
+    private final int paramCount;
     private final List<TypeHandler> parameterTypes;
     private final TypeRegistry typeRegistry;
     private final ResultBuilder.Factory resultBuilder;
     private final RowBuilder.Factory rowBuilder;
 
-    public SQL(Type type, String name, String sql, List<TypeHandler> parameterTypes, TypeRegistry typeRegistry, ResultBuilder.Factory resultBuilder, RowBuilder.Factory rowBuilder) {
+    public SQL(Type type, String name, String sql, int paramCount, List<TypeHandler> parameterTypes, TypeRegistry typeRegistry, ResultBuilder.Factory resultBuilder, RowBuilder.Factory rowBuilder) {
         this.type = type;
         this.name = name;
         this.sql = sql;
+        this.paramCount = paramCount;
         this.parameterTypes = parameterTypes;
         this.typeRegistry = typeRegistry;
         this.resultBuilder = resultBuilder;
@@ -42,6 +50,10 @@ public final class SQL {
         return type;
     }
 
+    public int getParamCount() {
+        return paramCount;
+    }
+
     public String getName() {
         return name;
     }
@@ -49,6 +61,7 @@ public final class SQL {
     public TypeRegistry getTypeRegistry() {
         return typeRegistry;
     }
+
     public String getSQLString() {
         return sql;
     }
@@ -161,17 +174,36 @@ public final class SQL {
             });
         }
 
+        public Builder addParameterType(TypeHandler typeHandler) {
+            this.paramTypes.add(typeHandler);
+            return this;
+        }
+
+        public int getParamCount() {
+            Matcher m = PARAM_PATTERN.matcher(sql);
+            int paramCount = 0;
+
+            while (m.find()) {
+                String d = m.group().substring(1);
+                paramCount = Math.max(paramCount, Integer.parseInt(d));
+            }
+            return paramCount;
+        }
+
         public SQL create() {
+            int paramCount = getParamCount();
+
             if (type == Type.QUERY) {
-                return new SQL(type, name, sql, paramTypes, typeRegistry, resultBuilder, rowBuilder);
+                return new SQL(type, name, sql, paramCount, paramTypes, typeRegistry, resultBuilder, rowBuilder);
             } else {
-                return new SQL(type, name, sql, paramTypes, typeRegistry, null, null);
+                return new SQL(type, name, sql, paramCount, paramTypes, typeRegistry, null, null);
             }
         }
 
         public PreparedSQL prepare(Connection con) throws IOException {
             return con.prepare(this.create());
         }
+
     }
 
     public static Builder query(String sql) {

@@ -3,9 +3,12 @@ package shadow.pgsql;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
+import shadow.pgsql.types.NBase;
+import shadow.pgsql.types.Types;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.math.BigInteger;
 import java.time.*;
 import java.util.*;
 
@@ -147,9 +150,21 @@ public class BasicTest {
         assertEquals(value, pq.queryWith(value));
     }
 
+
+    @Test
+    public void testSingleNumeric() throws IOException {
+
+        SQL sql = SQL.query("SELECT fnumeric FROM num_types ORDER BY fnumeric LIMIT 1")
+                .buildResultsWith(Helpers.ONE_ROW)
+                .buildRowsWith(Helpers.ONE_COLUMN)
+                .create();
+        Object result = pg.query(sql);
+        System.out.println(result);
+    }
+
     @Test
     public void testNumeric() throws IOException {
-        // Object result = pg.queryWith("SELECT fnumeric FROM num_types ORDER BY fnumeric");
+
 
         try (PreparedSQL pq = roundtripQuery("num_types", "fnumeric")) {
             roundtrip(pq, new BigDecimal("0.123456789"));
@@ -167,9 +182,9 @@ public class BasicTest {
 
     public PreparedSQL roundtripQuery(String table, String field) throws IOException {
         SQL q = SQL.query(String.format("INSERT INTO %s (%s) VALUES ($1) RETURNING %s", table, field, field))
-                   .buildResultsWith(Helpers.ONE_ROW)
-                   .buildRowsWith(Helpers.ONE_COLUMN)
-                   .create();
+                .buildResultsWith(Helpers.ONE_ROW)
+                .buildRowsWith(Helpers.ONE_COLUMN)
+                .create();
 
         return pg.prepare(q);
     }
@@ -321,8 +336,14 @@ public class BasicTest {
     @Test
     public void testPool() throws Exception {
         DatabasePool pool = new DatabasePool(db);
+
+        SQL sql = SQL.query("SELECT * FROM types WHERE id = $1")
+                .addParameterType(Types.INT4)
+                .create();
+
         final int id = 1;
-        Object r1 = pool.withConnection(con -> con.queryWith(SQL.query("SELECT * FROM types WHERE id = $1").create(), id));
+
+        Object r1 = pool.withConnection(con -> con.queryWith(sql, id));
         Object r2 = pool.withConnection(new GetById(id));
         // FIXME: you call this a test?
     }
@@ -376,6 +397,52 @@ public class BasicTest {
             fail("not supposed to succeed, handed null value to not null field");
         } catch (CommandException e) {
             // TODO: verify
+        }
+    }
+
+    public void nbaseRoundtrip(BigDecimal bd) {
+        NBase nb = NBase.pack(bd);
+        assertEquals(bd, nb.unpack());
+    }
+
+    public void nbaseRoundtripSQL(BigDecimal bd) {
+    }
+
+    @Test
+    public void testNBase() throws IOException {
+        // nbaseRoundtrip(new BigDecimal("124123424748280884901092740643973478506398851268580860000206792733576.28567546"));
+
+        Random r = new Random();
+        for (int i = 0; i < 1000000; i++) {
+            // generate a bunch of random decimals
+            BigInteger bi = new BigInteger(r.nextInt(512), r);
+            BigDecimal bd = new BigDecimal(bi, r.nextInt(16));
+
+            nbaseRoundtrip(bd);
+        }
+    }
+
+    @Test
+    public void testNBaseSQL() throws IOException {
+        // nbaseRoundtrip(new BigDecimal("0"));
+
+        try (PreparedSQL pq = roundtripQuery("num_types", "fnumeric")) {
+
+            BigDecimal bd = BigDecimal.ZERO;
+            assertEquals(bd, pq.queryWith(bd));
+            bd = new BigDecimal("0E-7");
+            assertEquals(bd, pq.queryWith(bd));
+            bd = new BigDecimal("123112312340921837419304719028341724912571293487129348172349218759283512943871290487120985713290487109234871234091287431209348712034987");
+            assertEquals(bd, pq.queryWith(bd));
+
+            Random r = new Random();
+            for (int i = 0; i < 10000; i++) {
+                // generate a bunch of random decimals
+                BigInteger bi = new BigInteger(r.nextInt(1024), r);
+                bd = new BigDecimal(bi, r.nextInt(64));
+
+                assertEquals(bd, pq.queryWith(bd));
+            }
         }
     }
 }

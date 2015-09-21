@@ -24,26 +24,40 @@ public class StreamIO implements IO {
 
     @Override
     public void send(ByteBuffer buf) throws IOException {
-        while (buf.hasRemaining()) {
-            out.write(buf.get());
+        // will usually use direct bytebuffers which may not have arrays
+        if (buf.hasArray()) {
+            out.write(buf.array(), buf.position(), buf.remaining());
+        } else {
+            while (buf.hasRemaining()) {
+                // BufferedOutputStream.write is synchronized, might not be best to call it for every byte
+                out.write(buf.get());
+            }
         }
         out.flush();
     }
 
     @Override
     public void recv(ByteBuffer buf) throws IOException {
-
-        while (buf.hasRemaining()) {
-            // BufferedInputStream already buffers but it will buffer multiple frames
-            // could write custom BufferedInputStream that provides better way to transfer into ByteBuffer
-            // but at this point this seems like overkill
-            int bytesToRead = Math.min(buf.remaining(), CHUNK_SIZE);
-            int bytesRead = in.read(chunk, 0, bytesToRead);
-
-            if (bytesRead == -1) {
-                throw new EOFException();
+        // will usually use direct bytebuffers which may not have arrays
+        if (buf.hasArray()) {
+            while (buf.hasRemaining()) {
+                int pos = buf.position();
+                int read = in.read(buf.array(), pos, buf.remaining());
+                buf.position(pos + read);
             }
-            buf.put(chunk, 0, bytesRead);
+        } else {
+            while (buf.hasRemaining()) {
+                // BufferedInputStream already buffers but it will buffer multiple frames
+                // could write custom BufferedInputStream that provides better way to transfer into ByteBuffer
+                // but at this point this seems like overkill
+                int bytesToRead = Math.min(buf.remaining(), CHUNK_SIZE);
+                int bytesRead = in.read(chunk, 0, bytesToRead);
+
+                if (bytesRead == -1) {
+                    throw new EOFException();
+                }
+                buf.put(chunk, 0, bytesRead);
+            }
         }
 
         buf.flip();

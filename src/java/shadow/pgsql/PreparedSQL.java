@@ -4,9 +4,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 
 import java.io.IOException;
-import java.util.Arrays;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 /**
  * Created by zilence on 12.08.14.
@@ -19,30 +17,30 @@ public class PreparedSQL implements AutoCloseable {
 
     protected final SQL sql;
     protected final ColumnInfo[] columnInfos;
-    protected final TypeHandler[] typeDecoders;
+    protected final TypeHandler[] columnDecoders;
 
     private final ResultBuilder resultBuilder;
     private final RowBuilder rowBuilder;
 
-    protected final TypeHandler[] typeEncoders;
+    protected final TypeHandler[] paramEncoders;
 
     final Timer executeTimer;
 
     // statement
-    PreparedSQL(Connection pg, String statementId, TypeHandler[] typeEncoders, SQL sql) {
-        this(pg, statementId, typeEncoders, sql, null, null, null, null);
+    PreparedSQL(Connection pg, String statementId, TypeHandler[] paramEncoders, SQL sql) {
+        this(pg, statementId, paramEncoders, sql, null, null, null, null);
     }
 
     // query
-    PreparedSQL(Connection pg, String statementId, TypeHandler[] typeEncoders, SQL sql, ColumnInfo[] columnInfos, TypeHandler[] typeDecoders, ResultBuilder resultBuilder, RowBuilder rowBuilder) {
+    PreparedSQL(Connection pg, String statementId, TypeHandler[] paramEncoders, SQL sql, ColumnInfo[] columnInfos, TypeHandler[] columnDecoders, ResultBuilder resultBuilder, RowBuilder rowBuilder) {
         this.pg = pg;
         this.statementId = statementId;
-        this.typeEncoders = typeEncoders;
+        this.paramEncoders = paramEncoders;
         this.executeTimer = getExecuteTimer(pg, sql.getName());
         this.sql = sql;
 
         this.columnInfos = columnInfos;
-        this.typeDecoders = typeDecoders;
+        this.columnDecoders = columnDecoders;
         this.resultBuilder = resultBuilder;
         this.rowBuilder = rowBuilder;
 
@@ -78,13 +76,17 @@ public class PreparedSQL implements AutoCloseable {
         return query(Arrays.asList(params));
     }
 
+    public Object query() throws IOException {
+        return query(Connection.EMPTY_LIST);
+    }
+
     public Object query(final List queryParams) throws IOException {
         if (!sql.expectsData()) {
             throw new IllegalStateException("SQL expects no data, use execute");
         }
         final Timer.Context timerContext = executeTimer.time();
 
-        executeWithParams(typeDecoders, queryParams);
+        executeWithParams(columnDecoders, queryParams);
 
         Object queryResult = resultBuilder.init();
 
@@ -105,7 +107,7 @@ public class PreparedSQL implements AutoCloseable {
                 }
                 case 'D':  // DataRow
                 {
-                    queryResult = resultBuilder.add(queryResult, pg.input.readRow(typeDecoders, columnInfos, rowBuilder));
+                    queryResult = resultBuilder.add(queryResult, pg.input.readRow(columnDecoders, columnInfos, rowBuilder));
                     break;
                 }
                 case 'C': { // CommandComplete
@@ -147,8 +149,8 @@ public class PreparedSQL implements AutoCloseable {
 
 
     protected void executeWithParams(TypeHandler[] typeDecoders, List queryParams) throws IOException {
-        if (queryParams.size() != typeEncoders.length) {
-            throw new IllegalArgumentException(String.format("Incorrect params provided to Statement, expected %d got %d", typeEncoders.length, queryParams.size()));
+        if (queryParams.size() != paramEncoders.length) {
+            throw new IllegalArgumentException(String.format("Incorrect params provided to Statement, expected %d got %d", paramEncoders.length, queryParams.size()));
         }
 
         pg.checkReady();
@@ -156,7 +158,7 @@ public class PreparedSQL implements AutoCloseable {
 
         try {
             // flow -> B/E/H
-            pg.output.writeBind(typeEncoders, typeDecoders, queryParams, sql, statementId, null);
+            pg.output.writeBind(paramEncoders, queryParams, sql, statementId, null, typeDecoders);
             pg.output.writeExecute(null, 0);
             pg.output.writeSync();
 

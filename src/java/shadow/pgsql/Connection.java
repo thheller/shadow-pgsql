@@ -14,6 +14,8 @@ import java.util.*;
  * @author Thomas Heller
  */
 public class Connection implements AutoCloseable {
+    final static List EMPTY_LIST = Collections.unmodifiableList(new ArrayList());
+
     private int queryId = 0;
     private int savepointId = 0;
 
@@ -195,47 +197,38 @@ public class Connection implements AutoCloseable {
     }
 
     public Object query(SQL sql) throws IOException {
-        return query(sql, new ArrayList());
+        return query(sql, EMPTY_LIST);
     }
 
+    /**
+     * execute a query once
+     *
+     * uses the optimized path of P/B/D/E/S
+     *
+     * sacrifices some verification for performance
+     * since we don't get a ParameterDescription 't' we cannot know the type of parameters
+     * so they must be provided
+     *
+     * saves one network roundtrip since the prepare flow is
+     * P/D/S -> network -> B/E/S -> network (repeat-able)
+     *
+     * @param sql
+     * @param params
+     * @return result constructed via sql row/result builders
+     * @throws IOException
+     */
     public Object query(SQL sql, List<Object> params) throws IOException {
-        /**
-         * ROADBLOCK ...
-         *
-         * must implement Binary (and/or) Text for ALL types
-         *
-         * the optimized path of P/B/D/E/S for queries that are only executed once
-         *
-         * http://www.postgresql.org/docs/9.4/static/protocol-message-formats.html
-         *
-         * the Bind message
-         * After the last parameter, the following fields appear:
-
-         * Int16
-         * The number of result-column format codes that follow (denoted R below).
-         * This can be zero to indicate that there are no result columns or that the result
-         * columns should all use the default format (text); or one, in which case the specified
-         * format code is applied to all result columns (if any); or it can equal the actual
-         * number of result columns of the query.
-
-         * Int16[R]
-         * The result-column format codes. Each must presently be zero (text) or one (binary).
-         *
-         * Since we can't tell how many columns the result will contain, let alone their type,
-         * we can only execute with one-for-all which is either binary for all or text.
-         *
-         * binary is what I prefer but not all types have that implemented yet.
-         * text is also not implemented for all types because I hate text parsing
-         *
-
         final List<TypeHandler> paramEncoders = sql.getParameterTypes();
+        if (paramEncoders.size() != sql.getParamCount()) {
+            throw new IllegalArgumentException(String.format("SQL expects %d parameters, must specify their types. Only got %d types", sql.getParamCount(), paramEncoders.size()));
+        }
 
         checkReady();
         output.checkReset();
 
         output.writeParse(sql.getSQLString(), paramEncoders, null);
-        output.writeBind(paramEncoders, columnDecoders, params, sql, null, null);
-        output.writeDescribePortal("");
+        output.writeBind(paramEncoders.toArray(new TypeHandler[paramEncoders.size()]), params, sql, null, null, new short[]{1}); // all binary
+        output.writeDescribePortal(null);
         output.writeExecute(null, 0);
         output.writeSync();
 
@@ -246,8 +239,9 @@ public class Connection implements AutoCloseable {
 
         boolean parsed = false; // set by '1'
         boolean noData = false; // set by 'n'
+        boolean complete = false; // set by 'C'
 
-        // success flow usually is 1/(n|T)/Z
+        // success flow usually is 1/2/(n|T)/D*/C/Z
 
         Map<String, String> errorData = null;
 
@@ -267,6 +261,11 @@ public class Connection implements AutoCloseable {
                     parsed = true;
                     break;
                 }
+                case '2': // BindComplete
+                {
+                    input.checkSize("BindComplete", 0);
+                    break;
+                }
                 case 'T': // RowDescription
                 {
                     columnInfos = input.readRowDescription();
@@ -276,7 +275,6 @@ public class Connection implements AutoCloseable {
                         ColumnInfo f = columnInfos[i];
                         columnDecoders[i] = sql.getTypeRegistry().getTypeHandlerForField(db, f);
                     }
-
 
                     resultBuilder = sql.getResultBuilder().create(columnInfos);
                     rowBuilder = sql.getRowBuilder().create(columnInfos);
@@ -292,6 +290,13 @@ public class Connection implements AutoCloseable {
                 case 'D': // DataRow
                 {
                     queryResult = resultBuilder.add(queryResult, input.readRow(columnDecoders, columnInfos, rowBuilder));
+                    break;
+                }
+                case 'C': { // CommandComplete
+                    final String tag = input.readString();
+                    complete = true;
+
+                    // FIXME: losing information (tag)
                     break;
                 }
                 case 'Z': // ReadyForQuery
@@ -315,16 +320,14 @@ public class Connection implements AutoCloseable {
             }
             throw new CommandException(String.format("Failed to prepare Statement\nsql: %s", sql.getSQLString()), errorData);
         } else {
+            if (!complete) {
+                throw new IllegalStateException("not complete");
+            }
             if (noData) {
-                throw new IllegalStateException("backend will not send data, use statement instead of query when defining your SQL");
+                throw new IllegalStateException("backend did not send data, use statement instead of query when defining your SQL");
             } else {
                 return resultBuilder.complete(queryResult);
             }
-        }
-        */
-
-        try (PreparedSQL stmt = prepare(sql)) {
-           return stmt.query(params);
         }
     }
 

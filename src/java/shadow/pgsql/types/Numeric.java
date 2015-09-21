@@ -30,7 +30,7 @@ public class Numeric implements TypeHandler {
 
     @Override
     public boolean supportsBinary() {
-        return false; // need to figure out encoding first
+        return true;
     }
 
     @Override
@@ -60,7 +60,7 @@ public class Numeric implements TypeHandler {
             digits[i] = buf.getShort();
         }
 
-        return NBase.unpack(weight, sign, dscale, digits);
+        return new NBase(weight, sign, dscale, digits).unpack();
     }
 
     @Override

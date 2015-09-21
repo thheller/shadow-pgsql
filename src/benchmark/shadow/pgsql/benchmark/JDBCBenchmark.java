@@ -41,7 +41,7 @@ public class JDBCBenchmark implements AutoCloseable {
     public List<DatPojo> selectPojos() throws SQLException {
         List<DatPojo> result = new ArrayList<>();
 
-        try (PreparedStatement s = con.prepareStatement("SELECT * FROM pojos")) {
+        try (PreparedStatement s = con.prepareStatement("SELECT test_int, test_string, test_double FROM pojos")) {
             try (ResultSet rs = s.executeQuery()) {
                 while (rs.next()) {
                     DatPojo pojo = getDatPojo(rs);
@@ -60,7 +60,7 @@ public class JDBCBenchmark implements AutoCloseable {
         pojo.setTestString(rs.getString("test_string"));
         pojo.setTestInt(rs.getInt("test_int"));
         pojo.setTestDouble(rs.getDouble("test_double"));
-        pojo.setTestBigDecimal(rs.getBigDecimal("test_bd"));
+        // pojo.setTestBigDecimal(rs.getBigDecimal("test_bd"));
         return pojo;
     }
 
