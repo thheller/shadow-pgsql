@@ -2,6 +2,7 @@ package shadow.pgsql;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.util.List;
 import java.util.Stack;
 
 /**
@@ -27,9 +28,11 @@ public class ProtocolOutput {
 
     private final Stack<Mark> marks = new Stack<>();
 
+    private final Connection pg;
     private final IO io;
 
-    public ProtocolOutput(IO io) {
+    public ProtocolOutput(Connection pg, IO io) {
+        this.pg = pg;
         this.io = io;
     }
 
@@ -44,12 +47,12 @@ public class ProtocolOutput {
         }
     }
 
-    void beginCommand(char type) {
+    private void beginCommand(char type) {
         int8((byte) type);
         begin();
     }
 
-    void simpleCommand(char type) {
+    private void simpleCommand(char type) {
         int8((byte) type);
         int32(4);
     }
@@ -185,5 +188,115 @@ public class ProtocolOutput {
             throw new IllegalStateException(String.format("expected buffer position to be at 0 but is at %d", out.position()));
         }
     }
+
+    void writeBind(TypeHandler[] paramEncoders, TypeHandler[] columnDecoders, List<Object> queryParams, SQL sql, String statementId, String portalId) {
+        // Bind
+        beginCommand('B');
+        string(portalId); // portal name (might be null)
+        string(statementId); // statement name (should not be null)
+
+        // format codes for params
+        int16((short) paramEncoders.length);
+        for (TypeHandler t : paramEncoders) {
+            int16((short) (t.supportsBinary() ? 1 : 0)); // format code 0 = text, 1 = binary
+        }
+
+        int16((short) paramEncoders.length);
+        for (int i = 0; i < paramEncoders.length; i++) {
+            TypeHandler encoder = paramEncoders[i];
+
+            Object param = queryParams.get(i);
+
+            try {
+                if (param == null) {
+                    int32(-1);
+                } else if (encoder.supportsBinary()) {
+                    beginExclusive();
+                    encoder.encodeBinary(pg, this, param);
+                    complete();
+                } else {
+                    String paramString = encoder.encodeToString(pg, param);
+
+                    // FIXME: assumes UTF-8
+                    byte[] bytes = paramString.getBytes();
+
+                    int32(bytes.length);
+                    if (bytes.length > 0) {
+                        bytea(bytes);
+                    }
+                }
+            } catch (Exception e) {
+                throw new IllegalArgumentException(String.format("Failed to encode parameter $%d [%s -> \"%s\"]\nsql: %s", i + 1, encoder.getClass().getName(), param, sql.getSQLString()), e);
+            }
+        }
+
+        int16((short) columnDecoders.length);
+        for (TypeHandler t : columnDecoders) {
+            int16((short) (t.supportsBinary() ? 1 : 0));
+        }
+
+        complete();
+    }
+
+    void writeExecute(String portalId, int limit) {
+        beginCommand('E');
+        string(portalId); // portal name
+        int32(limit); // max rows, zero = no limit
+        complete();
+    }
+
+    void writeParse(String query, List<TypeHandler> typeHints, String statementId) {
+        beginCommand('P');
+        string(statementId);
+        string(query);
+        int16((short) typeHints.size());
+        for (TypeHandler t : typeHints) {
+            if (t == null) {
+                int32(0);
+            } else {
+                int oid = t.getTypeOid();
+                if (oid == -1) {
+                    oid = pg.db.getOidForName(t.getTypeName());
+                }
+                int32(oid);
+            }
+        }
+        complete();
+    }
+
+    void writeDescribePortal(String portal) {
+        beginCommand('D');
+        int8((byte) 'P');
+        string(portal);
+        complete();
+    }
+
+    void writeDescribeStatement(String statementId) {
+        beginCommand('D');
+        int8((byte) 'S');
+        string(statementId);
+        complete();
+    }
+
+    void writeSync() {
+        simpleCommand('S');
+    }
+
+    void writeCloseStatement(String statementId) {
+        beginCommand('C');
+        int8((byte) 'S');
+        string(statementId);
+        complete();
+    }
+
+    void writeCloseConnection() {
+        simpleCommand('X');
+    }
+
+    void writeSimpleQuery(String query) {
+        beginCommand('Q');
+        string(query);
+    }
+
 }
 

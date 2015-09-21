@@ -20,4 +20,5 @@
                          :dependencies [[org.clojure/clojure "1.7.0"]
                                         [criterium "0.4.3"]
                                         [org.postgresql/postgresql "9.4-1203-jdbc42"]
-                                        [org.clojure/java.jdbc "0.4.2"]]}})
+                                        [org.clojure/java.jdbc "0.4.2"]
+                                        ]}})

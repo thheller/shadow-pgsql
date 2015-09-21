@@ -5,6 +5,7 @@ import shadow.pgsql.*;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -23,6 +24,12 @@ public class ShadowBenchmark implements AutoCloseable {
             .buildRowsWith(ROW_TO_POJO)
             .create();
 
+    private static final SQL SELECT_ONE_POJO = SQL.query("SELECT * FROM pojos WHERE test_int = $1")
+            .withName("benchmark")
+            .buildResultsWith(Helpers.ONE_ROW)
+            .buildRowsWith(ROW_TO_POJO)
+            .create();
+
 
     public ShadowBenchmark() throws IOException {
         this.db = Database.setup("localhost", 5432, "zilence", "shadow_bench");
@@ -31,6 +38,10 @@ public class ShadowBenchmark implements AutoCloseable {
 
     public List<DatPojo> selectPojos() throws IOException {
         return (List<DatPojo>) pg.query(SELECT_POJOS);
+    }
+
+    public DatPojo selectPojo(int id) throws IOException {
+        return (DatPojo) pg.queryWith(SELECT_ONE_POJO, id);
     }
 
 
@@ -43,11 +54,13 @@ public class ShadowBenchmark implements AutoCloseable {
     public static void main(String[] args) throws Exception {
         ShadowBenchmark bench = new ShadowBenchmark();
 
+        Random r = new Random();
+
         Timer timer = bench.db.getMetricRegistry().timer("benchmark");
 
         System.out.println("Warmup");
         for (int i = 0; i < 1000; i++) {
-            bench.selectPojos();
+            bench.selectPojo(r.nextInt(100));
         }
 
         System.out.println("Press any key to start.");
@@ -56,7 +69,7 @@ public class ShadowBenchmark implements AutoCloseable {
 
         for (int i = 0; i < 10000; i++) {
             Timer.Context t = timer.time();
-            List pojos = bench.selectPojos();
+            bench.selectPojo(r.nextInt(100));
 
             long duration = t.stop();
             //System.out.format("got %d pojos\n", pojos.size());

@@ -35,7 +35,7 @@ public class Connection implements AutoCloseable {
         this.io = io;
 
         this.input = new ProtocolInput(this, io);
-        this.output = new ProtocolOutput(io);
+        this.output = new ProtocolOutput(this, io);
 
         this.state = ConnectionState.CONNECTED;
     }
@@ -145,8 +145,7 @@ public class Connection implements AutoCloseable {
         checkReady();
 
         output.checkReset();
-        output.beginCommand('Q');
-        output.string(query);
+        output.writeSimpleQuery(query);
         output.complete();
 
         output.flushAndReset();
@@ -200,8 +199,132 @@ public class Connection implements AutoCloseable {
     }
 
     public Object query(SQL sql, List<Object> params) throws IOException {
+        /**
+         * ROADBLOCK ...
+         *
+         * must implement Binary (and/or) Text for ALL types
+         *
+         * the optimized path of P/B/D/E/S for queries that are only executed once
+         *
+         * http://www.postgresql.org/docs/9.4/static/protocol-message-formats.html
+         *
+         * the Bind message
+         * After the last parameter, the following fields appear:
+
+         * Int16
+         * The number of result-column format codes that follow (denoted R below).
+         * This can be zero to indicate that there are no result columns or that the result
+         * columns should all use the default format (text); or one, in which case the specified
+         * format code is applied to all result columns (if any); or it can equal the actual
+         * number of result columns of the query.
+
+         * Int16[R]
+         * The result-column format codes. Each must presently be zero (text) or one (binary).
+         *
+         * Since we can't tell how many columns the result will contain, let alone their type,
+         * we can only execute with one-for-all which is either binary for all or text.
+         *
+         * binary is what I prefer but not all types have that implemented yet.
+         * text is also not implemented for all types because I hate text parsing
+         *
+
+        final List<TypeHandler> paramEncoders = sql.getParameterTypes();
+
+        checkReady();
+        output.checkReset();
+
+        output.writeParse(sql.getSQLString(), paramEncoders, null);
+        output.writeBind(paramEncoders, columnDecoders, params, sql, null, null);
+        output.writeDescribePortal("");
+        output.writeExecute(null, 0);
+        output.writeSync();
+
+        output.flushAndReset();
+
+        ColumnInfo[] columnInfos = null; // created by 'T'
+        TypeHandler[] columnDecoders = null;
+
+        boolean parsed = false; // set by '1'
+        boolean noData = false; // set by 'n'
+
+        // success flow usually is 1/(n|T)/Z
+
+        Map<String, String> errorData = null;
+
+        ResultBuilder resultBuilder = null;
+        RowBuilder rowBuilder = null;
+
+        Object queryResult = null;
+
+        PREPARE_LOOP:
+        while (true) {
+            final char type = input.readNextCommand();
+
+            switch (type) {
+                case '1': // ParseComplete
+                {
+                    input.checkSize("ParseComplete", 0);
+                    parsed = true;
+                    break;
+                }
+                case 'T': // RowDescription
+                {
+                    columnInfos = input.readRowDescription();
+
+                    columnDecoders = new TypeHandler[columnInfos.length];
+                    for (int i = 0; i < columnInfos.length; i++) {
+                        ColumnInfo f = columnInfos[i];
+                        columnDecoders[i] = sql.getTypeRegistry().getTypeHandlerForField(db, f);
+                    }
+
+
+                    resultBuilder = sql.getResultBuilder().create(columnInfos);
+                    rowBuilder = sql.getRowBuilder().create(columnInfos);
+
+                    queryResult = resultBuilder.init();
+                    break;
+                }
+                case 'n': // NoData
+                {
+                    noData = true;
+                    break;
+                }
+                case 'D': // DataRow
+                {
+                    queryResult = resultBuilder.add(queryResult, input.readRow(columnDecoders, columnInfos, rowBuilder));
+                    break;
+                }
+                case 'Z': // ReadyForQuery
+                {
+                    input.readReadyForQuery();
+                    break PREPARE_LOOP;
+                }
+                case 'E': // Error
+                {
+                    errorData = input.readMessages();
+                    break;
+                }
+                default:
+                    throw new IllegalStateException(String.format("protocol violation, received '%s' after Parse", type));
+            }
+        }
+
+        if (errorData != null) {
+            if (parsed) {
+                throw new IllegalStateException("Error but Parsed!");
+            }
+            throw new CommandException(String.format("Failed to prepare Statement\nsql: %s", sql.getSQLString()), errorData);
+        } else {
+            if (noData) {
+                throw new IllegalStateException("backend will not send data, use statement instead of query when defining your SQL");
+            } else {
+                return resultBuilder.complete(queryResult);
+            }
+        }
+        */
+
         try (PreparedSQL stmt = prepare(sql)) {
-            return stmt.query(params);
+           return stmt.query(params);
         }
     }
 
@@ -358,37 +481,20 @@ public class Connection implements AutoCloseable {
         return prepareTimer.time();
     }
 
+
     private void writeParseDescribeSync(String query, List<TypeHandler> typeHints, String statementId) throws IOException {
         checkReady();
         output.checkReset();
 
         try {
             // Parse
-            output.beginCommand('P');
-            output.string(statementId);
-            output.string(query);
-            output.int16((short) typeHints.size());
-            for (TypeHandler t : typeHints) {
-                if (t == null) {
-                    output.int32(0);
-                } else {
-                    int oid = t.getTypeOid();
-                    if (oid == -1) {
-                        oid = db.getOidForName(t.getTypeName());
-                    }
-                    output.int32(oid);
-                }
-            }
-            output.complete();
+            output.writeParse(query, typeHints, statementId);
 
             // Describe - want ParameterDescription + RowDescription
-            output.beginCommand('D');
-            output.int8((byte) 'S');
-            output.string(statementId);
-            output.complete();
+            output.writeDescribeStatement(statementId);
 
             // Sync
-            output.simpleCommand('S');
+            output.writeSync();
             output.flushAndReset();
 
             this.state = ConnectionState.QUERY_OPEN;
@@ -400,7 +506,7 @@ public class Connection implements AutoCloseable {
 
     public void close() throws IOException {
         output.checkReset();
-        output.simpleCommand('X');
+        output.writeCloseConnection();
         output.flushAndReset();
 
         this.state = ConnectionState.CLOSED;
@@ -412,13 +518,10 @@ public class Connection implements AutoCloseable {
         output.checkReset();
 
         // Close
-        output.beginCommand('C');
-        output.int8((byte) 'S');
-        output.string(statementId);
-        output.complete();
+        output.writeCloseStatement(statementId);
 
         // Sync
-        output.simpleCommand('S');
+        output.writeSync();
         output.flushAndReset();
 
         state = ConnectionState.QUERY_CLOSE;

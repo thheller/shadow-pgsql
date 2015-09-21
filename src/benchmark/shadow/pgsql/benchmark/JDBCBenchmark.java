@@ -7,6 +7,7 @@ import com.codahale.metrics.Timer;
 import java.sql.*;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Random;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -43,12 +44,7 @@ public class JDBCBenchmark implements AutoCloseable {
         try (PreparedStatement s = con.prepareStatement("SELECT * FROM pojos")) {
             try (ResultSet rs = s.executeQuery()) {
                 while (rs.next()) {
-                   DatPojo pojo = new DatPojo();
-
-                    pojo.setTestString(rs.getString("test_string"));
-                    pojo.setTestInt(rs.getInt("test_int"));
-                    pojo.setTestDouble(rs.getDouble("test_double"));
-                    pojo.setTestBigDecimal(rs.getBigDecimal("test_bd"));
+                    DatPojo pojo = getDatPojo(rs);
 
                     result.add(pojo);
                 }
@@ -58,23 +54,49 @@ public class JDBCBenchmark implements AutoCloseable {
         return result;
     }
 
+    private DatPojo getDatPojo(ResultSet rs) throws SQLException {
+        DatPojo pojo = new DatPojo();
+
+        pojo.setTestString(rs.getString("test_string"));
+        pojo.setTestInt(rs.getInt("test_int"));
+        pojo.setTestDouble(rs.getDouble("test_double"));
+        pojo.setTestBigDecimal(rs.getBigDecimal("test_bd"));
+        return pojo;
+    }
+
+    public DatPojo selectPojo(int id) throws SQLException {
+        try (PreparedStatement s = con.prepareStatement("SELECT * FROM pojos WHERE test_int = ?")) {
+            s.setInt(1, id);
+            try (ResultSet rs = s.executeQuery()) {
+                if (rs.next()) {
+                    return getDatPojo(rs);
+                } else {
+                    throw new IllegalStateException("pojo 1 not found");
+                }
+
+            }
+        }
+    }
+
     public static void main(String[] args) throws Exception {
         JDBCBenchmark bench = new JDBCBenchmark("blubb");
+
+        Random r = new Random();
 
         MetricRegistry mr = new MetricRegistry();
         Timer timer = mr.timer("benchmark");
 
         System.out.println("Press any key to start.");
-        System.in.read();
+        // System.in.read();
         System.out.println("Warmup");
         for (int i = 0; i < 1000; i++) {
-            bench.selectPojos();
+            bench.selectPojo(r.nextInt(100));
         }
 
         System.out.println("Looping");
-        for (int i = 0; i < 3000; i++) {
+        for (int i = 0; i < 10000; i++) {
             Timer.Context t = timer.time();
-            List pojos = bench.selectPojos();
+            bench.selectPojo(r.nextInt(100));
 
             long duration = t.stop();
             //System.out.format("got %d pojos\n", pojos.size());
@@ -83,7 +105,7 @@ public class JDBCBenchmark implements AutoCloseable {
             }
         }
         System.out.println("Completed press any key to quit");
-        System.in.read();
+        // System.in.read();
         bench.close();
 
         ConsoleReporter report = ConsoleReporter.forRegistry(mr)

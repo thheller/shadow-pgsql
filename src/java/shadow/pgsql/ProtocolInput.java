@@ -234,4 +234,65 @@ public class ProtocolInput {
     public int getCurrentSize() {
         return currentSize;
     }
+
+
+    Object readRow(TypeHandler[] typeDecoders, ColumnInfo[] columnInfos, RowBuilder rowBuilder) throws IOException {
+        final int cols = getShort();
+
+        if (cols != columnInfos.length) {
+            throw new IllegalStateException(
+                    String.format("backend said to expect %d columns, but data had %d", columnInfos.length, cols)
+            );
+        }
+
+        Object row = rowBuilder.init();
+
+        for (int i = 0; i < columnInfos.length; i++) {
+            final ColumnInfo field = columnInfos[i];
+            final TypeHandler decoder = typeDecoders[i];
+            final int colSize = getInt();
+
+            Object columnValue = null;
+
+            if (colSize != -1) {
+                columnValue = readColumnValue(field, decoder, colSize);
+            }
+
+            row = rowBuilder.add(row, field, i, columnValue);
+        }
+
+        return rowBuilder.complete(row);
+    }
+
+    Object readColumnValue(ColumnInfo field, TypeHandler decoder, int colSize) throws IOException {
+        try {
+            Object columnValue;
+
+            if (decoder.supportsBinary()) {
+                int mark = current.position();
+
+                columnValue = decoder.decodeBinary(pg, field, current, colSize);
+
+                if (current.position() != mark + colSize) {
+                    throw new IllegalStateException(String.format("Field:[%s ,%s] did not consume all bytes", field.name, decoder));
+                }
+            } else {
+                byte[] bytes = new byte[colSize];
+                getBytes(bytes);
+
+                // FIXME: assumes UTF-8
+                final String stringValue = new String(bytes);
+                columnValue = decoder.decodeString(pg, field, stringValue);
+            }
+
+            return columnValue;
+        } catch (Exception e) {
+            throw new IllegalStateException(
+                    String.format("Failed parsing field \"%s\" of table \"%s\"",
+                            field.name,
+                            field.tableOid > 0 ? pg.db.oid2name.get(field.tableOid) : "--unknown--"
+                    ), e);
+        }
+    }
+
 }

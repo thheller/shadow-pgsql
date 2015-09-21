@@ -105,7 +105,7 @@ public class PreparedSQL implements AutoCloseable {
                 }
                 case 'D':  // DataRow
                 {
-                    queryResult = resultBuilder.add(queryResult, readRow());
+                    queryResult = resultBuilder.add(queryResult, pg.input.readRow(typeDecoders, columnInfos, rowBuilder));
                     break;
                 }
                 case 'C': { // CommandComplete
@@ -145,125 +145,6 @@ public class PreparedSQL implements AutoCloseable {
         return result;
     }
 
-    private Object readRow() throws IOException {
-        final int cols = pg.input.getShort();
-
-        if (cols != columnInfos.length) {
-            throw new IllegalStateException(
-                    String.format("backend said to expect %d columns, but data had %d", columnInfos.length, cols)
-            );
-        }
-
-        Object row = rowBuilder.init();
-
-        for (int i = 0; i < columnInfos.length; i++) {
-            final ColumnInfo field = columnInfos[i];
-            final TypeHandler decoder = typeDecoders[i];
-            final int colSize = pg.input.getInt();
-
-            Object columnValue = null;
-
-            if (colSize != -1) {
-                columnValue = readColumnValue(field, decoder, colSize);
-            }
-
-            row = rowBuilder.add(row, field, i, columnValue);
-        }
-
-        return rowBuilder.complete(row);
-    }
-
-    private Object readColumnValue(ColumnInfo field, TypeHandler decoder, int colSize) throws IOException {
-        try {
-            Object columnValue;
-
-            if (decoder.supportsBinary()) {
-                int mark = pg.input.current.position();
-
-                columnValue = decoder.decodeBinary(pg, field, pg.input.current, colSize);
-
-                if (pg.input.current.position() != mark + colSize) {
-                    throw new IllegalStateException(String.format("Field:[%s ,%s] did not consume all bytes", field.name, decoder));
-                }
-            } else {
-                byte[] bytes = new byte[colSize];
-                pg.input.getBytes(bytes);
-
-                // FIXME: assumes UTF-8
-                final String stringValue = new String(bytes);
-                columnValue = decoder.decodeString(pg, field, stringValue);
-            }
-
-            return columnValue;
-        } catch (Exception e) {
-            throw new IllegalStateException(
-                    String.format("Failed parsing field \"%s\" of table \"%s\"",
-                            field.name,
-                            field.tableOid > 0 ? pg.db.oid2name.get(field.tableOid) : "--unknown--"
-                    ), e);
-        }
-    }
-
-    protected void writeBind(TypeHandler[] typeDecoders, List<Object> queryParams, String portalId) {
-        // Bind
-        pg.output.beginCommand('B');
-        pg.output.string(portalId); // portal name (might be null)
-        pg.output.string(statementId); // statement name (should not be null)
-
-        // format codes for params
-        pg.output.int16((short) typeEncoders.length);
-        for (TypeHandler t : typeEncoders) {
-            pg.output.int16((short) (t.supportsBinary() ? 1 : 0)); // format code 0 = text, 1 = binary
-        }
-
-        pg.output.int16((short) typeEncoders.length);
-        for (int i = 0; i < typeEncoders.length; i++) {
-            TypeHandler encoder = typeEncoders[i];
-
-            Object param = queryParams.get(i);
-
-            try {
-                if (param == null) {
-                    pg.output.int32(-1);
-                } else if (encoder.supportsBinary()) {
-                    pg.output.beginExclusive();
-                    encoder.encodeBinary(pg, pg.output, param);
-                    pg.output.complete();
-                } else {
-                    String paramString = encoder.encodeToString(pg, param);
-
-                    // FIXME: assumes UTF-8
-                    byte[] bytes = paramString.getBytes();
-
-                    pg.output.int32(bytes.length);
-                    if (bytes.length > 0) {
-                        pg.output.bytea(bytes);
-                    }
-                }
-            } catch (Exception e) {
-                throw new IllegalArgumentException(String.format("Failed to encode parameter $%d [%s -> \"%s\"]\nsql: %s", i + 1, encoder.getClass().getName(), param, sql.getSQLString()), e);
-            }
-        }
-
-        pg.output.int16((short) typeDecoders.length);
-        for (TypeHandler t : typeDecoders) {
-            pg.output.int16((short) (t.supportsBinary() ? 1 : 0));
-        }
-
-        pg.output.complete();
-    }
-
-    protected void writeExecute(String portalId, int limit) {
-        pg.output.beginCommand('E');
-        pg.output.string(portalId); // portal name
-        pg.output.int32(limit); // max rows, zero = no limit
-        pg.output.complete();
-    }
-
-    protected void writeSync() {
-        // Sync
-        pg.output.simpleCommand('S');
-    }
 
     protected void executeWithParams(TypeHandler[] typeDecoders, List queryParams) throws IOException {
         if (queryParams.size() != typeEncoders.length) {
@@ -273,12 +154,11 @@ public class PreparedSQL implements AutoCloseable {
         pg.checkReady();
         pg.output.checkReset();
 
-        // flow -> B/E/H
-
         try {
-            writeBind(typeDecoders, queryParams, null);
-            writeExecute(null, 0);
-            writeSync();
+            // flow -> B/E/H
+            pg.output.writeBind(typeEncoders, typeDecoders, queryParams, sql, statementId, null);
+            pg.output.writeExecute(null, 0);
+            pg.output.writeSync();
 
             pg.output.flushAndReset();
             pg.state = ConnectionState.QUERY_RESULT;
