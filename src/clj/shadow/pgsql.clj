@@ -76,18 +76,18 @@
 (defmacro with-transaction [db & body]
   `(let [body-fn# (fn [] ~@body)]
      (-with-connection ~db
-                       (fn [^Connection con#]
-                         (if (.isInTransaction con#)
-                           (body-fn#)
-                           (do (.begin con#)
-                               (try
-                                 (let [result# (body-fn#)]
-                                   (.commit con#)
-                                   result#)
-                                 (catch Throwable t#
-                                   (.rollback con#)
-                                   (throw t#)
-                                   ))))))))
+       (fn [^Connection con#]
+         (if (.isInTransaction con#)
+           (body-fn#)
+           (do (.begin con#)
+               (try
+                 (let [result# (body-fn#)]
+                   (.commit con#)
+                   result#)
+                 (catch Throwable t#
+                   (.rollback con#)
+                   (throw t#)
+                   ))))))))
 
 (defn ^Connection get-connection [db]
   (if-let [con (-get-connection db)]
@@ -490,46 +490,46 @@ keyword-type
      (-with-connection db (fn [^Connection con]
                             (.query con query params))))))
 
-(defn insert
-  [db
-   {:keys [table columns columns-fn returning merge-fn]
-    row-builder :row
-    result-builder :result
-    :as args
-    :or {columns-fn (fn [row columns]
-                      (mapv #(get row %) columns))
-         merge-fn merge}}
-   data]
+(defn create-insert-sql
+  [{:keys [^TypeRegistry types column-naming table-naming] :as db}
+   {:keys [table columns returning] :as spec}]
   (when-not (and (vector? columns)
-                 (seq columns))
-    (throw (ex-info "need a vector of columns" args)))
+                 (seq columns)
+                 (not (nil? table)))
+    (throw (ex-info "need a vector of :columns and :table name" {:spec spec})))
 
-  (let [{:keys [table-naming column-naming ^TypeRegistry types]} db
-        table-name (to-sql-name table-naming table)
+  (let [table-name (sql/to-sql-name table-naming table)
 
-        result-builder (or result-builder sql/result->one-row)
+        result-builder (or (:result-builder spec)
+                           result->one-row)
 
-        row-builder (or row-builder sql/row->map)
+        row-builder (or (:row-builder spec)
+                        row->map)
 
         column-names (->> columns
                           (map #(to-sql-name column-naming %))
                           (into []))
 
+        columns-fn (or (:columns-fn spec)
+                       (fn [row]
+                         (mapv #(get row %) columns)))
+
         param-types (->> column-names
                          (map #(.getTypeHandlerForColumn types table-name %))
                          (into []))
 
-        returning? (and (not (nil? returning))
-                        (not (empty? returning)))
+        returning? (or (keyword? returning)
+                       (seq returning))
 
-        returning-names (if returning?
-                          (->> returning
+        returning-names (when returning?
+                          (->> (if (keyword? returning)
+                                 [returning]
+                                 returning)
                                (map #(to-sql-name column-naming %))
-                               (map quoted))
-                          ["1"])
+                               (map quoted)))
 
         sql (str "INSERT INTO "
-                 table-name
+                 (sql/quoted table-name)
                  " ("
                  (->> column-names
                       (map quoted)
@@ -541,35 +541,64 @@ keyword-type
                       (map inc) ;; 1-idx
                       (map #(str "$" %))
                       (str/join ","))
-                 ") RETURNING "
-                 (str/join ", " returning-names)) ;; already quoted if needed
+                 ")"
+                 (when returning?
+                   (str " RETURNING " (str/join ", " returning-names))))
 
-        query (-> (SQL/query sql)
-                  ;; FIXME: find a way to specify the query name
-                  (.withName (str "insert." table-name))
-                  (.withParamTypes param-types)
-                  (.withTypeRegistry types)
-                  (set-row-builder row-builder db)
-                  (set-result-builder result-builder db)
-                  (.create))]
+        merge-fn (or (:merge-fn spec)
+                     (cond
+                       (not returning?)
+                       nil
 
+                       (keyword? returning)
+                       (fn [row insert]
+                         (get insert returning))
+
+                       (vector? returning)
+                       merge))
+
+        sql (if returning?
+              (-> (SQL/query sql)
+                  (sql/set-row-builder row-builder db)
+                  (sql/set-result-builder result-builder db))
+              (SQL/statement sql))
+
+        sql (-> sql
+                (.withName (or (:name spec)
+                               (str "insert." table-name)))
+                (.withParamTypes param-types)
+                (.withTypeRegistry types)
+                (.create))]
+
+    {:sql sql
+     :columns columns
+     :returning? returning?
+     :columns-fn columns-fn
+     :merge-fn merge-fn}
+    ))
+
+(defn insert
+  [db spec data]
+  (let [{:keys [sql returning? columns-fn merge-fn]} (create-insert-sql db spec)]
     (with-transaction db
-      (with-open [prep (.prepare (get-connection db) query)]
+      (with-open [prep (.prepare (get-connection db) sql)]
         (if returning?
           (->> data
                (reduce (fn [result row]
-                         (let [params (columns-fn row columns)
+                         (let [params (columns-fn row)
                                row-result (.query prep params)]
                            (conj! result (merge-fn row row-result))))
                        (transient []))
                (persistent!))
           ;; do not accumulate a result unless requested
           (doseq [row data]
-            (.query prep (columns-fn row columns)))
+            (.execute prep (columns-fn row)))
           )))))
 
 (defn insert-one [db stmt data]
-  (first (insert db stmt [data])))
+  (->> [data]
+       (insert db stmt)
+       (first)))
 
 ;; FIXME: this might be too confusing
 (defn insert-one!
@@ -593,34 +622,40 @@ keyword-type
   ([db table data]
    (insert-one! db table data nil))
   ([db table data return-column]
-   (first (insert db
-                  {:table table
-                   :columns (into [] (keys data))
-                   :merge-fn (fn [row insert]
-                               (cond
-                                 (nil? return-column)
-                                 row
+   (->> [data]
+        (insert
+          db
+          {:table table
+           :columns (into [] (keys data))
+           :returning return-column
+           })
+        (first))))
 
-                                 (keyword? return-column)
-                                 (get insert return-column)
 
-                                 (vector? return-column)
-                                 (merge row insert)))
-                   :returning (cond
-                                (nil? return-column)
-                                nil
+(defn prepare-insert
+  [db spec]
+  (let [{:keys [columns sql returning? merge-fn]} (create-insert-sql db spec)]
+    (let [prep (.prepare (get-connection db) sql)]
+      (reify
+        java.lang.AutoCloseable
+        (close [_]
+          (.close prep))
 
-                                (keyword? return-column)
-                                [return-column]
+        clojure.lang.IDeref
+        (deref [_]
+          prep)
 
-                                (vector? return-column)
-                                return-column
+        clojure.lang.IFn
+        (invoke [_ data]
+          (when-not (map? data)
+            (throw (ex-info "only map args supported to prepared insert" {:data data})))
 
-                                :else
-                                (throw (ex-info "invalid return value" {:table table
-                                                                        :data data
-                                                                        :return return-column})))}
-                  [data]))))
+          (let [params (mapv #(get data %) columns)]
+            (if returning?
+              (merge-fn data (.query prep params))
+              (.getRowsAffected (.execute prep params)))
+            ))))))
+
 
 (defn prepare [db stmt]
   (let [connection (get-connection db)
@@ -669,6 +704,80 @@ keyword-type
                             (-> (.execute con stmt params)
                                 (.getRowsAffected)))))))
 
+
+(defn create-update-sql
+  [{:keys [^TypeRegistry types table-naming column-naming] :as db}
+   {:keys [table columns where where-params] :as spec}]
+  {:pre [(not (nil? table))
+         (vector? columns)
+         (seq columns)
+         (string? where)
+         (vector? where-params)]}
+  (let [offset (count where-params)
+        table-name (to-sql-name table-naming table)
+
+        column-names (->> columns
+                          (map #(to-sql-name column-naming %)))
+
+        where-param-names (->> where-params
+                               (map #(to-sql-name column-naming %)))
+
+        columns-fn (fn [input]
+                     (mapv #(get input %) columns))
+
+        params-fn (if where-params
+                    (fn [input]
+                      (mapv #(get input %) where-params))
+                    (fn [input]
+                      []))
+
+        param-types (->> (concat where-param-names column-names)
+                         (map #(.getTypeHandlerForColumn types table-name %))
+                         (into []))
+
+        sql (str "UPDATE "
+                 (quoted table-name)
+                 " SET "
+                 (->> column-names
+                      (map quoted)
+                      (map-indexed (fn [idx col-name]
+                                     (str col-name " = $" (+ idx offset 1))))
+                      (str/join ", "))
+                 (when where
+                   (str " WHERE " where)))
+
+        sql (-> (SQL/statement sql)
+                (.withName (or (:name spec)
+                               (str "update." table-name)))
+                (.withTypeRegistry types)
+                (.withParamTypes param-types)
+                (.create))]
+    {:sql sql
+     :columns-fn columns-fn
+     :params-fn params-fn}))
+
+(defn prepare-update [db spec]
+  (let [{:keys [sql columns-fn params-fn]} (create-update-sql db spec)
+        prep (.prepare (get-connection db) sql)]
+
+    (reify
+      java.lang.AutoCloseable
+      (close [_]
+        (.close prep))
+
+      clojure.lang.IDeref
+      (deref [_]
+        prep)
+
+      clojure.lang.IFn
+      (invoke [_ data]
+        (let [where-params (params-fn data)
+              columns (columns-fn data)
+              params (into where-params columns)]
+          (.getRowsAffected (.execute prep params))))
+      (invoke [_ data params]
+        (.getRowsAffected (.execute prep (into params (columns-fn data))))))))
+
 (defn update!
   "(sql/update! db :table {:column value, ...} \"id = $1\" id)
    this is also potentially dangerous since all columns are updated"
@@ -676,6 +785,8 @@ keyword-type
    (update! db table data "1=1" []))
   ([{:keys [table-naming column-naming ^TypeRegistry types] :as db} table data where params]
    {:pre [(sequential? params)]}
+
+    ;; FIXME: use create-update-sql
    (let [offset (count params)
          table-name (to-sql-name table-naming table)
 
@@ -692,14 +803,20 @@ keyword-type
                        (str/join ", "))
                   " WHERE "
                   where)]
-     (execute db
-              {:sql sql
-               ;; type hints for the columns since we know table/column
-               ;; nil for remainder since we only know expected oid
-               :params (->> column-names
-                            (map #(.getTypeHandlerForColumn types table-name %))
-                            (concat (repeat (count params) nil)))}
-              (into params (vals data))))))
+     (let [stmt (as-statement db {:sql sql
+                                  ;; type hints for the columns since we know table/column
+                                  ;; nil for remainder since we only know expected oid
+                                  :params (->> column-names
+                                               (map #(.getTypeHandlerForColumn types table-name %))
+                                               (concat (repeat (count params) nil)))})]
+       (-with-connection db
+         (fn [^Connection con]
+           ;; must go through prepare because the types of the params are unknown
+           ;; reflection not yet supported, the server tells us the types on prepare
+           (with-open [prep (.prepare con stmt)]
+             (-> prep
+                 (.execute (into params (vals data)))
+                 (.getRowsAffected)))))))))
 
 (defn build-types
   ([type-map table-naming column-naming]

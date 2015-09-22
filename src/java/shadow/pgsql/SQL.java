@@ -82,6 +82,16 @@ public final class SQL {
         return type == Type.QUERY;
     }
 
+    @Override
+    public String toString() {
+        return "SQL{" +
+                "type=" + type +
+                ", name='" + name + '\'' +
+                ", sql='" + sql + '\'' +
+                ", paramCount=" + paramCount +
+                '}';
+    }
+
     public static class Builder {
         final Type type;
         final String sql;

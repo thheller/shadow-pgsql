@@ -7,8 +7,6 @@
 (def ?insert-num-types
   {:table :num-types
    :columns [:fint2]
-   :columns-fn (fn [row columns]
-                 (mapv #(get row %) columns))
    :returning [:id]
 
    :merge-fn (fn [row result]
@@ -44,8 +42,7 @@
 
 (deftest test-arrays
   (with-open [db (-> (sql/start {:user "zilence" :database "shadow_pgsql"})
-                     (sql/with-types {:array-types {:atext keyword-set-type}})
-                     )]
+                     (sql/with-types {:array-types {:atext keyword-set-type}}))]
 
     (sql/execute db "DELETE FROM array_types")
 
@@ -65,14 +62,15 @@
 (deftest test-prepare
   (with-open [db (test-db)]
     (sql/with-connection db
-      (with-open [insert (sql/prepare db "INSERT INTO types (t_bool, t_int4, t_text) VALUES ($1, $2, $3)")]
-        (pprint (insert true 1 "hello"))
-        (pprint (insert false 2 "world"))))
+                         (with-open [insert (sql/prepare db "INSERT INTO types (t_bool, t_int4, t_text) VALUES ($1, $2, $3)")]
+                           (pprint (insert true 1 "hello"))
+                           (pprint (insert false 2 "world"))))
     ))
 
 
 (def ?update-add-one
   {:sql "UPDATE types SET t_int2 = t_int2 + 1 WHERE id = $1 RETURNING t_int2"
+   :params [sql/int4-type]
    :result sql/result->one-row
    :row sql/row->one-column})
 
@@ -120,3 +118,60 @@
       (is (thrown? java.lang.IllegalArgumentException (sql/insert-one! db :types {:t-hstore {"invalid" "key"}})))
       (is (thrown? java.lang.IllegalArgumentException (sql/insert-one! db :types {:t-hstore {:invalid :value}})))
       )))
+
+(deftest test-prepared-insert
+  (with-open [db (test-db)]
+    (sql/with-transaction db
+      (with-open [insert (sql/prepare-insert db {:table :num-types
+                                                 :columns [:fint2 :fint4 :fint8]
+                                                 :returning [:id]})]
+        (let [result (insert {:fint2 2
+                              :fint4 4
+                              :fint8 8})]
+          (is (pos? (:id result)))
+          (is (= 2 (:fint2 result)))
+          (is (= 4 (:fint4 result)))
+          (is (= 8 (:fint8 result)))
+          )))))
+
+(deftest test-prepared-insert-no-return
+  (with-open [db (test-db)]
+    (sql/with-transaction db
+      (with-open [insert (sql/prepare-insert db {:table :num-types
+                                                 :columns [:fint2 :fint4 :fint8]})]
+        (let [result (insert {:fint2 2
+                              :fint4 4
+                              :fint8 8})]
+
+          ;; number of rows affected
+          (is (= 1 result))
+          )))))
+
+(deftest test-prepared-insert-return-single-column
+  (with-open [db (test-db)]
+    (sql/with-transaction db
+      (with-open [insert (sql/prepare-insert db {:table :num-types
+                                                 :columns [:fint2 :fint4 :fint8]
+                                                 :returning :id})]
+        (let [result (insert {:fint2 2
+                              :fint4 4
+                              :fint8 8})]
+
+          ;; value of :id
+          (is (pos? result))
+          )))))
+
+;; FIXME: should also support :returning
+(deftest test-prepared-update
+  (with-open [db (test-db)]
+    (sql/with-transaction db
+      (with-open [update (sql/prepare-update db {:table :num-types
+                                                 :columns [:fint2 :fint4]
+                                                 :where "id = $1"
+                                                 :where-params [:id]})]
+        (let [rows-affected (update {:fint2 2
+                                     :fint4 4
+                                     :id 0})]
+          ;; row with id should not exist and therefore not update
+          (is (zero? rows-affected))
+          )))))
