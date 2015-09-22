@@ -1,8 +1,5 @@
 package shadow.pgsql;
 
-import com.codahale.metrics.Histogram;
-import com.codahale.metrics.MetricRegistry;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.HashMap;
@@ -14,15 +11,11 @@ import java.util.Map;
 public class ProtocolInput {
     // FIXME: find a good default buffer size, this may be too much but shouldn't hurt.
     // FIXME: make configurable
-    private static final int BUFFER_SIZE = 65536;
 
     private final Connection pg;
     private final IO io;
 
-    private final ByteBuffer frame = ByteBuffer.allocate(5); // 1 byte command, 4 byte size
-    private final ByteBuffer defaultBuffer = ByteBuffer.allocateDirect(BUFFER_SIZE);
-
-    public ByteBuffer current = defaultBuffer;
+    public ByteBuffer current;
     public int currentSize = 0;
 
     public ProtocolInput(Connection pg, IO io) {
@@ -71,50 +64,27 @@ public class ProtocolInput {
         }
 
         while (true) {
-            frame.clear();
+            final IO.Frame frame = io.nextFrame();
 
-            io.recv(frame);
+            currentSize = frame.size;
+            current = frame.buffer;
 
-            final char type = (char) frame.get();
-            final int size = currentSize = frame.getInt() - 4; // size includes itself
-
-            // FIXME: worth skipping?
-            if (size == 0) {
-                this.current = null;
-                return type;
-            } else {
-                if (size > BUFFER_SIZE) {
-                    // oversized packet, allocate new buffer
-                    // FIXME: is this really the best strategy here? at least make it configurable
-                    current = ByteBuffer.allocateDirect(size);
-                } else {
-                    // otherwise use a default, keeps allocations down to a minimum
-                    current = defaultBuffer;
-                    current.clear();
-                    current.limit(size);
+            switch (frame.type) {
+                case 'N': // NoticeResponse
+                {
+                    pg.handleNotice(readMessages());
+                    break;
                 }
-
-                io.recv(current);
-
-                // FIXME: current.asReadyOnlyBuffer() ?
-
-                switch (type) {
-                    case 'N': // NoticeResponse
-                    {
-                        pg.handleNotice(readMessages());
-                        break;
-                    }
-                    case 'A': // NotificationResponse
-                    {
-                        final int processId = current.getInt();
-                        final String channel = readString();
-                        final String payload = readString();
-                        pg.handleNotify(processId, channel, payload);
-                        break;
-                    }
-                    default:
-                        return type;
+                case 'A': // NotificationResponse
+                {
+                    final int processId = current.getInt();
+                    final String channel = readString();
+                    final String payload = readString();
+                    pg.handleNotify(processId, channel, payload);
+                    break;
                 }
+                default:
+                    return frame.type;
             }
         }
     }
@@ -236,7 +206,7 @@ public class ProtocolInput {
     }
 
 
-    Object readRow(TypeHandler[] typeDecoders, ColumnInfo[] columnInfos, RowBuilder rowBuilder) throws IOException {
+    Object readRow(final TypeHandler[] typeDecoders, final ColumnInfo[] columnInfos, final RowBuilder rowBuilder) throws IOException {
         final int cols = getShort();
 
         if (cols != columnInfos.length) {
@@ -247,7 +217,7 @@ public class ProtocolInput {
 
         Object row = rowBuilder.init();
 
-        for (int i = 0; i < columnInfos.length; i++) {
+        for (int i = 0; i < cols; i++) {
             final ColumnInfo field = columnInfos[i];
             final TypeHandler decoder = typeDecoders[i];
             final int colSize = getInt();
@@ -264,11 +234,11 @@ public class ProtocolInput {
         return rowBuilder.complete(row);
     }
 
-    Object readColumnValue(ColumnInfo field, TypeHandler decoder, int colSize) throws IOException {
+    Object readColumnValue(final ColumnInfo field, final TypeHandler decoder, int colSize) throws IOException {
         try {
             Object columnValue;
 
-            if (decoder.supportsBinary()) {
+             if (decoder.supportsBinary()) {
                 int mark = current.position();
 
                 columnValue = decoder.decodeBinary(pg, field, current, colSize);
@@ -281,7 +251,7 @@ public class ProtocolInput {
                 getBytes(bytes);
 
                 // FIXME: assumes UTF-8
-                final String stringValue = new String(bytes);
+                final String stringValue = new String(bytes, 0, colSize, "UTF-8");
                 columnValue = decoder.decodeString(pg, field, stringValue);
             }
 

@@ -37,6 +37,10 @@ public class StreamIO implements IO {
     }
 
     @Override
+    public Frame nextFrame() throws IOException {
+        throw new IllegalStateException("stream-io not up-to-date");
+    }
+
     public void recv(ByteBuffer buf) throws IOException {
         // will usually use direct bytebuffers which may not have arrays
         if (buf.hasArray()) {

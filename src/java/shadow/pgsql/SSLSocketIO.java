@@ -154,7 +154,11 @@ public class SSLSocketIO implements IO {
         }
     }
 
-    @Override
+
+    public IO.Frame nextFrame() {
+        throw new IllegalStateException("ssl not up-to-date");
+    }
+
     public void recv(ByteBuffer buf) throws IOException {
         // FIXME: this is so ugly, seems to work but is no way ideal
         // buffer underflow makes this weird

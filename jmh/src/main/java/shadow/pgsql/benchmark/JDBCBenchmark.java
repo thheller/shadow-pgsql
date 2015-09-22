@@ -50,7 +50,7 @@ public class JDBCBenchmark implements AutoCloseable {
     public List<DatPojo> selectPojos() throws SQLException {
         List<DatPojo> result = new ArrayList<>();
 
-        try (PreparedStatement s = con.prepareStatement("SELECT test_int, test_string, test_double FROM pojos")) {
+        try (PreparedStatement s = con.prepareStatement("SELECT test_int, test_double FROM pojos")) {
             try (ResultSet rs = s.executeQuery()) {
                 while (rs.next()) {
                     DatPojo pojo = getDatPojo(rs);
@@ -67,7 +67,7 @@ public class JDBCBenchmark implements AutoCloseable {
     private DatPojo getDatPojo(ResultSet rs) throws SQLException {
         DatPojo pojo = new DatPojo();
 
-        pojo.setTestString(rs.getString("test_string"));
+        // pojo.setTestString(rs.getString("test_string"));
         pojo.setTestInt(rs.getInt("test_int"));
         pojo.setTestDouble(rs.getDouble("test_double"));
         // pojo.setTestBigDecimal(rs.getBigDecimal("test_bd"));
@@ -98,19 +98,15 @@ public class JDBCBenchmark implements AutoCloseable {
 
         System.out.println("Press any key to start.");
         // System.in.read();
-        System.out.println("Warmup");
-        for (int i = 0; i < 1000; i++) {
-            bench.selectPojo(r.nextInt(100));
-        }
 
         System.out.println("Looping");
-        for (int i = 0; i < 10000; i++) {
+        for (int i = 0; i < 50000; i++) {
             Timer.Context t = timer.time();
-            bench.selectPojo(r.nextInt(100));
+            bench.selectPojos();
 
             long duration = t.stop();
             //System.out.format("got %d pojos\n", pojos.size());
-            if (i % 100 == 0) {
+            if (i % 500 == 0) {
                 System.out.format("run: %d duration: %d\n", i, duration);
             }
         }

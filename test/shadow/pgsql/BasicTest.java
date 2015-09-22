@@ -410,12 +410,14 @@ public class BasicTest {
     public void nbaseRoundtripSQL(BigDecimal bd) {
     }
 
+    private static final int NBASE_TESTS = 100;
+
     @Test
     public void testNBase() throws IOException {
         // nbaseRoundtrip(new BigDecimal("124123424748280884901092740643973478506398851268580860000206792733576.28567546"));
 
         Random r = new Random();
-        for (int i = 0; i < 1000000; i++) {
+        for (int i = 0; i < NBASE_TESTS; i++) {
             // generate a bunch of random decimals
             BigInteger bi = new BigInteger(r.nextInt(512), r);
             BigDecimal bd = new BigDecimal(bi, r.nextInt(16));
@@ -438,7 +440,7 @@ public class BasicTest {
             assertEquals(bd, pq.queryWith(bd));
 
             Random r = new Random();
-            for (int i = 0; i < 10000; i++) {
+            for (int i = 0; i < NBASE_TESTS; i++) {
                 // generate a bunch of random decimals
                 BigInteger bi = new BigInteger(r.nextInt(1024), r);
                 bd = new BigDecimal(bi, r.nextInt(64));
