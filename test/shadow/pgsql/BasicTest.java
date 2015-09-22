@@ -321,15 +321,17 @@ public class BasicTest {
     }
 
     public static class GetById implements DatabaseTask<Object> {
+        private final SQL sql;
         private final int id;
 
-        public GetById(int id) {
+        public GetById(SQL sql, int id) {
+            this.sql = sql;
             this.id = id;
         }
 
         @Override
         public Object withConnection(Connection con) throws Exception {
-            return con.queryWith(SQL.query("SELECT * FROM types WHERE id = $1").create(), id);
+            return con.queryWith(sql, id);
         }
     }
 
@@ -344,7 +346,7 @@ public class BasicTest {
         final int id = 1;
 
         Object r1 = pool.withConnection(con -> con.queryWith(sql, id));
-        Object r2 = pool.withConnection(new GetById(id));
+        Object r2 = pool.withConnection(new GetById(sql, id));
         // FIXME: you call this a test?
     }
 
