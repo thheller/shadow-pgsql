@@ -235,7 +235,14 @@ public class ProtocolOutput {
                     }
                 }
             } catch (Exception e) {
-                throw new IllegalArgumentException(String.format("Failed to encode parameter $%d [%s -> \"%s\"]\nsql: %s", i + 1, encoder.getClass().getName(), param, sql.getSQLString()), e);
+                throw new IllegalArgumentException(
+                        String.format("Failed to encode parameter $%d%nvalue: \"%s\"%ntype: %s%nusing: %s%nsql: %s",
+                                i + 1,
+                                param,
+                                param.getClass().getName(),
+                                encoder.getClass().getName(),
+                                sql.getSQLString()),
+                        e);
             }
         }
 

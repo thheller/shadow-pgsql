@@ -320,6 +320,9 @@ keyword-type
 (def long-set-type
   (set-type Types/INT8 false))
 
+(def numeric-type
+  Types/NUMERIC)
+
 (def numeric-vec-type
   (vec-type Types/NUMERIC false))
 
@@ -330,6 +333,9 @@ keyword-type
 
 (def timestamp-type
   Types/TIMESTAMP)
+
+(def date-type
+  Types/DATE)
 
 (def timestamp-vec-type
   (vec-type timestamp-type))
