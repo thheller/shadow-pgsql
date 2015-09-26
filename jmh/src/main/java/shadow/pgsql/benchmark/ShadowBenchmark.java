@@ -1,6 +1,7 @@
 package shadow.pgsql.benchmark;
 
 import com.codahale.metrics.*;
+import org.openjdk.jmh.annotations.*;
 import shadow.pgsql.*;
 import shadow.pgsql.types.Types;
 
@@ -12,32 +13,41 @@ import java.util.concurrent.TimeUnit;
 /**
  * Created by zilence on 19.09.15.
  */
+@State(Scope.Thread)
 public class ShadowBenchmark implements AutoCloseable {
 
-    private final Database db;
-    private final Connection pg;
+    private Database db;
+    private Connection pg;
 
     private final RowBuilder ROW_TO_POJO = new DatPojoBuilder();
 
     private final SQL SELECT_POJOS = SQL.query("SELECT test_int, test_string, test_double FROM pojos")
-            .withName("benchmark")
+            .withName("shadow/pgsql/benchmark")
             // .buildResultsWith(Helpers.RESULT_AS_LINKED_LIST)
             .buildRowsWith(ROW_TO_POJO)
             .create();
 
     private final SQL SELECT_ONE_POJO = SQL.query("SELECT * FROM pojos WHERE test_int = $1")
-            .withName("benchmark")
+            .withName("shadow/pgsql/benchmark")
             .buildResultsWith(Helpers.ONE_ROW)
             .buildRowsWith(ROW_TO_POJO)
             .addParameterType(Types.INT4)
             .create();
 
 
-    public ShadowBenchmark() throws IOException {
+
+    public ShadowBenchmark() {
+    }
+
+    @Setup
+    public void setup() throws IOException {
         this.db = Database.setup("localhost", 5432, "zilence", "shadow_bench");
         this.pg = db.connect();
     }
 
+    @Benchmark
+    @BenchmarkMode({Mode.AverageTime, Mode.SampleTime})
+    @OutputTimeUnit(TimeUnit.MICROSECONDS)
     public List<DatPojo> selectPojos() throws IOException {
         return (List<DatPojo>) pg.query(SELECT_POJOS);
     }
@@ -51,12 +61,14 @@ public class ShadowBenchmark implements AutoCloseable {
         this.pg.close();
     }
 
+
+
     public static void main(String[] args) throws Exception {
         ShadowBenchmark bench = new ShadowBenchmark();
 
         Random r = new Random();
 
-        Timer timer = bench.db.getMetricRegistry().timer("benchmark");
+        Timer timer = bench.db.getMetricRegistry().timer("shadow/pgsql/benchmark");
 
         System.out.println("Warmup");
         for (int i = 0; i < 1000; i++) {
@@ -85,7 +97,7 @@ public class ShadowBenchmark implements AutoCloseable {
                 .filter(new MetricFilter() {
                     @Override
                     public boolean matches(String s, Metric metric) {
-                        return s.equals("benchmark");
+                        return s.equals("shadow/pgsql/benchmark");
                     }
                 })
                 .convertRatesTo(TimeUnit.SECONDS)

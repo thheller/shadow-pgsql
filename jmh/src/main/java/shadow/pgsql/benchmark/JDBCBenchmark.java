@@ -3,6 +3,7 @@ package shadow.pgsql.benchmark;
 import com.codahale.metrics.ConsoleReporter;
 import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
+import org.openjdk.jmh.annotations.*;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -13,11 +14,16 @@ import java.util.concurrent.TimeUnit;
 /**
  * Created by zilence on 19.09.15.
  */
+@State(Scope.Thread)
 public class JDBCBenchmark implements AutoCloseable {
 
-    private final Connection con;
+    private Connection con;
 
-    public JDBCBenchmark(String url) throws SQLException {
+    public JDBCBenchmark() {
+    }
+
+    @Setup
+    public void setup() throws SQLException {
         this.con = DriverManager.getConnection("jdbc:postgresql://localhost:5432/shadow_bench", "zilence", "");
     }
 
@@ -38,6 +44,9 @@ public class JDBCBenchmark implements AutoCloseable {
         }
     }
 
+    @Benchmark
+    @BenchmarkMode({Mode.AverageTime, Mode.SampleTime})
+    @OutputTimeUnit(TimeUnit.MICROSECONDS)
     public List<DatPojo> selectPojos() throws SQLException {
         List<DatPojo> result = new ArrayList<>();
 
@@ -53,6 +62,7 @@ public class JDBCBenchmark implements AutoCloseable {
 
         return result;
     }
+
 
     private DatPojo getDatPojo(ResultSet rs) throws SQLException {
         DatPojo pojo = new DatPojo();
@@ -79,12 +89,12 @@ public class JDBCBenchmark implements AutoCloseable {
     }
 
     public static void main(String[] args) throws Exception {
-        JDBCBenchmark bench = new JDBCBenchmark("blubb");
+        JDBCBenchmark bench = new JDBCBenchmark();
 
         Random r = new Random();
 
         MetricRegistry mr = new MetricRegistry();
-        Timer timer = mr.timer("benchmark");
+        Timer timer = mr.timer("shadow/pgsql/benchmark");
 
         System.out.println("Press any key to start.");
         // System.in.read();
