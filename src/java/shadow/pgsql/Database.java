@@ -104,7 +104,7 @@ public class Database {
             channel.configureBlocking(true);
             io = new SocketIO(channel);
 
-            // io = new StreamIO(new Socket(config.host, config.port));
+            //io = new StreamIO(new Socket(config.host, config.port));
         }
 
         pg = new Connection(this, io);

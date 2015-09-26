@@ -141,7 +141,7 @@ public class SocketIO implements IO {
 
         frame.type = type;
         frame.size = size;
-        frame.buffer = buf;
+        frame.buffer = buf; // .asReadOnly?
 
         return frame;
     }

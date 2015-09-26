@@ -1,6 +1,9 @@
 package shadow.pgsql;
 
-import java.io.*;
+import java.io.BufferedInputStream;
+import java.io.BufferedOutputStream;
+import java.io.EOFException;
+import java.io.IOException;
 import java.net.Socket;
 import java.nio.ByteBuffer;
 
@@ -13,13 +16,35 @@ public class StreamIO implements IO {
     private BufferedOutputStream out;
     private BufferedInputStream in;
 
-    private static final int CHUNK_SIZE = 8192;
-    private final byte[] chunk = new byte[CHUNK_SIZE];
+    private final Frame frame = new Frame();
+    private final ByteBuffer recvBuffer = ByteBuffer.allocate(65536);
 
     public StreamIO(Socket socket) throws IOException {
         this.socket = socket;
         this.out = new BufferedOutputStream(socket.getOutputStream());
         this.in = new BufferedInputStream(socket.getInputStream());
+    }
+
+
+    static class Frame implements ProtocolFrame {
+        char type;
+        int size;
+        ByteBuffer buffer;
+
+        @Override
+        public char getType() {
+            return type;
+        }
+
+        @Override
+        public int getSize() {
+            return size;
+        }
+
+        @Override
+        public ByteBuffer getBuffer() {
+            return buffer;
+        }
     }
 
     @Override
@@ -36,35 +61,59 @@ public class StreamIO implements IO {
         out.flush();
     }
 
-    @Override
-    public ProtocolFrame nextFrame() throws IOException {
-        throw new IllegalStateException("stream-io not up-to-date");
-    }
-
-    public void recv(ByteBuffer buf) throws IOException {
-        // will usually use direct bytebuffers which may not have arrays
-        if (buf.hasArray()) {
-            while (buf.hasRemaining()) {
-                int pos = buf.position();
-                int read = in.read(buf.array(), pos, buf.remaining());
-                buf.position(pos + read);
-            }
-        } else {
-            while (buf.hasRemaining()) {
-                // BufferedInputStream already buffers but it will buffer multiple frames
-                // could write custom BufferedInputStream that provides better way to transfer into ByteBuffer
-                // but at this point this seems like overkill
-                int bytesToRead = Math.min(buf.remaining(), CHUNK_SIZE);
-                int bytesRead = in.read(chunk, 0, bytesToRead);
-
-                if (bytesRead == -1) {
-                    throw new EOFException();
-                }
-                buf.put(chunk, 0, bytesRead);
-            }
+    private char readChar() throws IOException {
+        int c = in.read();
+        if (c < 0) {
+            throw new EOFException();
         }
 
-        buf.flip();
+        return (char) c;
+    }
+
+    private final byte[] int4buf = new byte[4];
+
+    private int readInt() throws IOException {
+        if (in.read(int4buf) != 4) {
+            throw new EOFException();
+        }
+
+        return (int4buf[0] & 0xFF) << 24 |
+                (int4buf[1] & 0xFF) << 16 |
+                (int4buf[2] & 0xFF) << 8 |
+                (int4buf[3] & 0xFF);
+    }
+
+    @Override
+    public ProtocolFrame nextFrame() throws IOException {
+        frame.type = readChar();
+        frame.size = readInt() - 4;
+
+        ByteBuffer buf;
+        if (frame.size > recvBuffer.capacity()) {
+            buf = ByteBuffer.allocate(frame.size);
+        } else {
+            buf = recvBuffer;
+        }
+
+        buf.position(0);
+        buf.limit(frame.size);
+
+        int remaining = frame.size;
+        int pos = 0;
+
+        while (remaining > 0) {
+            int read = in.read(buf.array(), pos, remaining);
+            if (read < 0) {
+                throw new EOFException();
+            }
+
+            pos += read;
+            remaining -= read;
+        }
+
+        frame.buffer = buf;
+
+        return frame;
     }
 
     @Override

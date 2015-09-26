@@ -65,35 +65,35 @@ public class ShadowBenchmark implements AutoCloseable {
 
     public static void main(String[] args) throws Exception {
         ShadowBenchmark bench = new ShadowBenchmark();
+        bench.setup();
 
         Random r = new Random();
 
-        // Timer timer = bench.db.getMetricRegistry().timer("benchmark");
+        Timer timer = bench.db.getMetricRegistry().timer("benchmark");
 
         System.out.println("Press any key to start.");
         // System.in.read();
         System.out.println("Looping");
 
         for (int i = 0; i < 50000; i++) {
-            // Timer.Context t = timer.time();
+            Timer.Context t = timer.time();
             bench.selectPojos();
 
-            // long duration = t.stop();
-            //System.out.format("got %d pojos\n", pojos.size());
+            long duration = t.stop();
             if (i % 500 == 0) {
-                // System.out.format("run: %d duration: %d\n", i, duration);
+                System.out.format("run: %d duration: %d\n", i, duration);
             }
         }
 
         System.out.println("Completed press any key to quit");
-        System.in.read();
+        // System.in.read();
         bench.close();
 
         ConsoleReporter report = ConsoleReporter.forRegistry(bench.db.getMetricRegistry())
                 .filter(new MetricFilter() {
                     @Override
                     public boolean matches(String s, Metric metric) {
-                        return s.equals("shadow/pgsql/benchmark");
+                        return s.equals("benchmark");
                     }
                 })
                 .convertRatesTo(TimeUnit.SECONDS)
