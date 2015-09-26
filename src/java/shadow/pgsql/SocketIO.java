@@ -17,6 +17,7 @@ public class SocketIO implements IO {
     // making it bigger does not seem to provide any benefit
     // private static final int BUFFER_SIZE = 8192;
     private static final int BUFFER_SIZE = 65536;
+    private final Frame frame;
 
     private char previousFrame;
     private int nextPosition;
@@ -30,6 +31,8 @@ public class SocketIO implements IO {
         this.previousFrame = 0;
         this.nextPosition = 0;
         this.nextLimit = 0;
+
+        this.frame = new Frame();
     }
 
     @Override
@@ -41,7 +44,31 @@ public class SocketIO implements IO {
         }
     }
 
-    public Frame nextFrame() throws IOException {
+    static class Frame implements ProtocolFrame {
+        char type;
+        int size;
+        ByteBuffer buffer;
+
+        public Frame() {
+        }
+
+        @Override
+        public char getType() {
+            return type;
+        }
+
+        @Override
+        public int getSize() {
+            return size;
+        }
+
+        @Override
+        public ByteBuffer getBuffer() {
+            return buffer;
+        }
+    }
+
+    public ProtocolFrame nextFrame() throws IOException {
         if (recvBuffer.hasRemaining()) {
             throw new IllegalStateException("previous frame did not consume all bytes");
         }
@@ -112,7 +139,11 @@ public class SocketIO implements IO {
             throw new IllegalStateException("protocol error, did not properly set up buf");
         }
 
-        return new IO.Frame(type, size, buf);
+        frame.type = type;
+        frame.size = size;
+        frame.buffer = buf;
+
+        return frame;
     }
 
     @Override

@@ -64,12 +64,12 @@ public class ProtocolInput {
         }
 
         while (true) {
-            final IO.Frame frame = io.nextFrame();
+            final ProtocolFrame frame = io.nextFrame();
 
-            currentSize = frame.size;
-            current = frame.buffer;
+            currentSize = frame.getSize();
+            current = frame.getBuffer();
 
-            switch (frame.type) {
+            switch (frame.getType()) {
                 case 'N': // NoticeResponse
                 {
                     pg.handleNotice(readMessages());
@@ -84,7 +84,7 @@ public class ProtocolInput {
                     break;
                 }
                 default:
-                    return frame.type;
+                    return frame.getType();
             }
         }
     }

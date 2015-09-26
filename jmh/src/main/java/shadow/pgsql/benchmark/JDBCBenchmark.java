@@ -111,7 +111,7 @@ public class JDBCBenchmark implements AutoCloseable {
             }
         }
         System.out.println("Completed press any key to quit");
-        // System.in.read();
+        System.in.read();
         bench.close();
 
         ConsoleReporter report = ConsoleReporter.forRegistry(mr)

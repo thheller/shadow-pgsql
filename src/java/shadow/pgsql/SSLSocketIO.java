@@ -155,7 +155,7 @@ public class SSLSocketIO implements IO {
     }
 
 
-    public IO.Frame nextFrame() {
+    public ProtocolFrame nextFrame() {
         throw new IllegalStateException("ssl not up-to-date");
     }
 

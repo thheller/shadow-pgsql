@@ -37,7 +37,7 @@ public class StreamIO implements IO {
     }
 
     @Override
-    public Frame nextFrame() throws IOException {
+    public ProtocolFrame nextFrame() throws IOException {
         throw new IllegalStateException("stream-io not up-to-date");
     }
 
