@@ -1,4 +1,5 @@
 /target
+/jmh/target
 /classes
 /checkouts
 /.idea
