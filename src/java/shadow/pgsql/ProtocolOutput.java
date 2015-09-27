@@ -3,6 +3,7 @@ package shadow.pgsql;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
+import java.util.Map;
 import java.util.Stack;
 
 /**
@@ -189,6 +190,17 @@ public class ProtocolOutput {
         }
     }
 
+    void writeStartup(Map<String, String> opts) {
+        begin();
+        int32(196608); // 3.0
+        for (String k : opts.keySet()) {
+            string(k);
+            string(opts.get(k));
+        }
+        string(); // empty string (aka null byte) means end
+        complete();
+    }
+
     void writeBind(TypeHandler[] paramEncoders, List<Object> queryParams, SQL sql, String statementId, String portalId, TypeHandler[] columnDecoders) {
         short[] formatCodes = new short[columnDecoders.length];
         for (int i = 0; i < formatCodes.length; i++) {
@@ -312,6 +324,7 @@ public class ProtocolOutput {
     void writeSimpleQuery(String query) {
         beginCommand('Q');
         string(query);
+        complete();
     }
 
 }

@@ -64,16 +64,7 @@ public class Connection implements AutoCloseable {
 
     void startup(Map<String, String> opts, AuthHandler authHandler) throws IOException {
         output.checkReset();
-        output.begin();
-        output.int32(196608); // 3.0
-
-        for (String k : opts.keySet()) {
-            output.string(k);
-            output.string(opts.get(k));
-        }
-        output.string(); // empty string (aka null byte) means end
-
-        output.complete();
+        output.writeStartup(opts);
         output.flushAndReset();
 
         this.state = ConnectionState.START_UP;
@@ -148,8 +139,6 @@ public class Connection implements AutoCloseable {
 
         output.checkReset();
         output.writeSimpleQuery(query);
-        output.complete();
-
         output.flushAndReset();
 
         return input.readStatementResult(query);
