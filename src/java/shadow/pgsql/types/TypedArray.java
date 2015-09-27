@@ -1,9 +1,6 @@
 package shadow.pgsql.types;
 
-import shadow.pgsql.ColumnInfo;
-import shadow.pgsql.Connection;
-import shadow.pgsql.ProtocolOutput;
-import shadow.pgsql.TypeHandler;
+import shadow.pgsql.*;
 
 import java.io.IOException;
 import java.lang.reflect.Array;
@@ -131,9 +128,9 @@ public class TypedArray implements TypeHandler {
                     // output.int32(-1);
                     throw new IllegalArgumentException("array has nulls");
                 } else {
-                    output.beginExclusive();
+                    final ProtocolMarker mark = output.beginExclusive();
                     itemType.encodeBinary(con, output, value);
-                    output.complete();
+                    mark.complete();
                 }
             }
         } else if (param.getClass().isArray()) {
@@ -160,9 +157,9 @@ public class TypedArray implements TypeHandler {
                     // output.int32(-1);
                     throw new IllegalArgumentException("array has nulls");
                 } else {
-                    output.beginExclusive();
+                    final ProtocolMarker mark = output.beginExclusive();
                     itemType.encodeBinary(con, output, value);
-                    output.complete();
+                    mark.complete();
                 }
             }
         } else {

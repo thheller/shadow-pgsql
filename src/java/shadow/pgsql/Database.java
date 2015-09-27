@@ -5,6 +5,7 @@ import com.codahale.metrics.MetricRegistry;
 import com.codahale.metrics.Timer;
 import shadow.pgsql.utils.RowProcessor;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -91,7 +92,10 @@ public class Database {
 
             buf.limit(1);
 
-            channel.read(buf);
+            if (channel.read(buf) != 1) {
+                throw new EOFException();
+            }
+
             buf.flip();
 
             if (buf.get() != 'S') {

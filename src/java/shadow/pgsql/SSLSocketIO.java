@@ -154,12 +154,55 @@ public class SSLSocketIO implements IO {
         }
     }
 
+    private final ByteBuffer frameHeader = ByteBuffer.allocate(5);
+    private final ByteBuffer recvBuffer = ByteBuffer.allocate(16384);
 
-    public ProtocolFrame nextFrame() {
-        throw new IllegalStateException("ssl not up-to-date");
+    static class Frame implements ProtocolFrame {
+        char type;
+        int size;
+        ByteBuffer buffer;
+
+        @Override
+        public char getType() {
+            return type;
+        }
+
+        @Override
+        public int getSize() {
+            return size;
+        }
+
+        @Override
+        public ByteBuffer getBuffer() {
+            return buffer;
+        }
     }
 
-    public void recv(ByteBuffer buf) throws IOException {
+    private final Frame frame = new Frame();
+
+    public ProtocolFrame nextFrame() throws IOException {
+        frameHeader.clear();
+        recv(frameHeader);
+
+        frame.type = (char) frameHeader.get();
+        frame.size = frameHeader.getInt() - 4;
+
+        ByteBuffer buf;
+        if (frame.size < recvBuffer.capacity()) {
+            buf = recvBuffer;
+            buf.clear();
+            buf.limit(frame.size);
+        } else {
+            buf = ByteBuffer.allocate(frame.size);
+        }
+
+        recv(buf);
+
+        frame.buffer = buf;
+        return frame;
+    }
+
+    void recv(ByteBuffer buf) throws IOException {
         // FIXME: this is so ugly, seems to work but is no way ideal
         // buffer underflow makes this weird
         // sometimes sslIn contain enough for 2 unwraps, yet calling unwrap does not unwrap all bytes

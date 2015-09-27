@@ -75,7 +75,7 @@ public class ShadowBenchmark implements AutoCloseable {
         // System.in.read();
         System.out.println("Looping");
 
-        for (int i = 0; i < 50000; i++) {
+        for (int i = 0; i < 500000; i++) {
             Timer.Context t = timer.time();
             bench.selectPojos();
 

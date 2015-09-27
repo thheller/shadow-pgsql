@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 import java.util.Map;
-import java.util.Stack;
 
 /**
  * Created by thheller on 09.08.14.
@@ -12,22 +11,8 @@ import java.util.Stack;
 public class ProtocolOutput {
     // FIXME: whats a good default size?
     // don't want too much resizing, its fine to reserve some memory
-    public static final int BLOCK_SIZE = 16384;
+    public static final int BLOCK_SIZE = 8192;
     private ByteBuffer out = ByteBuffer.allocateDirect(BLOCK_SIZE);
-
-    static class Mark {
-        final int position;
-        final int size;
-        final boolean includeSize;
-
-        Mark(int position, int size, boolean includeSize) {
-            this.position = position;
-            this.size = size;
-            this.includeSize = includeSize;
-        }
-    }
-
-    private final Stack<Mark> marks = new Stack<>();
 
     private final Connection pg;
     private final IO io;
@@ -48,9 +33,9 @@ public class ProtocolOutput {
         }
     }
 
-    private void beginCommand(char type) {
+    private ProtocolMarker beginCommand(char type) {
         int8((byte) type);
-        begin();
+        return begin();
     }
 
     private void simpleCommand(char type) {
@@ -63,36 +48,33 @@ public class ProtocolOutput {
      * mark the position and insert placeholder, complete will then rewind
      * and insert the accumulated size including the size of the placeholder itself
      */
-    public void begin() {
-        begin(4, true);
+    public ProtocolMarker begin() {
+        return begin(4, true);
     }
 
-    public void beginInclusive() {
-        begin(4, true);
+    public ProtocolMarker beginInclusive() {
+        return begin(4, true);
     }
 
     /**
      * same as begin, but the accumulated size will not include the size of
      * the placeholder itself
      */
-    public void beginExclusive() {
-        begin(4, false);
+    public ProtocolMarker beginExclusive() {
+        return begin(4, false);
     }
 
-    void begin(int size, boolean includeSize) {
-        marks.push(new Mark(out.position(), size, includeSize));
+    ProtocolMarker begin(int size, boolean includeSize) {
+        final ProtocolMarker mark = new ProtocolMarker(this, out.position(), size, includeSize);
         // write placeholder size, 4 bytes
         maybeGrow(size);
         out.putInt(0);
+
+        return mark;
     }
 
-    public void complete() {
-        if (marks.empty()) {
-            throw new IllegalStateException("no marks");
-        }
-
+    void completeCommand(ProtocolMarker mark) {
         final int pos = out.position();
-        final Mark mark = marks.pop();
         out.position(mark.position);
         final int size = pos - mark.position;
         int32(mark.includeSize ? size : (size - mark.size));
@@ -101,18 +83,13 @@ public class ProtocolOutput {
 
     // not public, only connection or query should call this
     void flushAndReset() throws IOException {
-        if (!marks.empty()) {
-            throw new IllegalStateException("marks not empty!");
-        }
-
         out.flip();
         io.send(out);
         reset();
     }
 
     void reset() {
-        this.marks.clear();
-        this.out.clear();
+        out.clear();
     }
 
     public void int64(long val) {
@@ -146,11 +123,11 @@ public class ProtocolOutput {
     }
 
     // aka empty string
-    public void string() {
+    public void cstring() {
         nullTerminate();
     }
 
-    public void string(String s) {
+    public void cstring(String s) {
         if (s != null) {
             write(s.getBytes());
         }
@@ -191,14 +168,14 @@ public class ProtocolOutput {
     }
 
     void writeStartup(Map<String, String> opts) {
-        begin();
+        final ProtocolMarker mark = begin();
         int32(196608); // 3.0
         for (String k : opts.keySet()) {
-            string(k);
-            string(opts.get(k));
+            cstring(k);
+            cstring(opts.get(k));
         }
-        string(); // empty string (aka null byte) means end
-        complete();
+        cstring(); // empty string (aka null byte) means end
+        mark.complete();
     }
 
     void writeBind(TypeHandler[] paramEncoders, List<Object> queryParams, SQL sql, String statementId, String portalId, TypeHandler[] columnDecoders) {
@@ -212,9 +189,9 @@ public class ProtocolOutput {
 
     void writeBind(TypeHandler[] paramEncoders, List<Object> queryParams, SQL sql, String statementId, String portalId, short[] formatCodes) {
         // Bind
-        beginCommand('B');
-        string(portalId); // portal name (might be null)
-        string(statementId); // statement name (should not be null)
+        final ProtocolMarker mark = beginCommand('B');
+        cstring(portalId); // portal name (might be null)
+        cstring(statementId); // statement name (should not be null)
 
         // format codes for params
         int16((short) paramEncoders.length);
@@ -232,9 +209,9 @@ public class ProtocolOutput {
                 if (param == null) {
                     int32(-1);
                 } else if (encoder.supportsBinary()) {
-                    beginExclusive();
+                    final ProtocolMarker pMark = beginExclusive();
                     encoder.encodeBinary(pg, this, param);
-                    complete();
+                    pMark.complete();
                 } else {
                     String paramString = encoder.encodeToString(pg, param);
 
@@ -263,20 +240,20 @@ public class ProtocolOutput {
             int16(formatCode);
         }
 
-        complete();
+        mark.complete();
     }
 
     void writeExecute(String portalId, int limit) {
-        beginCommand('E');
-        string(portalId); // portal name
+        final ProtocolMarker mark = beginCommand('E');
+        cstring(portalId); // portal name
         int32(limit); // max rows, zero = no limit
-        complete();
+        mark.complete();
     }
 
     void writeParse(String query, List<TypeHandler> typeHints, String statementId) {
-        beginCommand('P');
-        string(statementId);
-        string(query);
+        final ProtocolMarker mark = beginCommand('P');
+        cstring(statementId);
+        cstring(query);
         int16((short) typeHints.size());
         for (TypeHandler t : typeHints) {
             if (t == null) {
@@ -289,21 +266,21 @@ public class ProtocolOutput {
                 int32(oid);
             }
         }
-        complete();
+        mark.complete();
     }
 
     void writeDescribePortal(String portal) {
-        beginCommand('D');
+        final ProtocolMarker mark = beginCommand('D');
         int8((byte) 'P');
-        string(portal);
-        complete();
+        cstring(portal);
+        mark.complete();
     }
 
     void writeDescribeStatement(String statementId) {
-        beginCommand('D');
+        final ProtocolMarker mark = beginCommand('D');
         int8((byte) 'S');
-        string(statementId);
-        complete();
+        cstring(statementId);
+        mark.complete();
     }
 
     void writeSync() {
@@ -311,10 +288,10 @@ public class ProtocolOutput {
     }
 
     void writeCloseStatement(String statementId) {
-        beginCommand('C');
+        final ProtocolMarker mark = beginCommand('C');
         int8((byte) 'S');
-        string(statementId);
-        complete();
+        cstring(statementId);
+        mark.complete();
     }
 
     void writeCloseConnection() {
@@ -322,9 +299,9 @@ public class ProtocolOutput {
     }
 
     void writeSimpleQuery(String query) {
-        beginCommand('Q');
-        string(query);
-        complete();
+        final ProtocolMarker mark = beginCommand('Q');
+        cstring(query);
+        mark.complete();
     }
 
 }

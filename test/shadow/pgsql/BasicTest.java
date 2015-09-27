@@ -26,6 +26,7 @@ public class BasicTest {
         this.db = new DatabaseConfig("localhost", 5432)
                 .setUser("zilence")
                 .setDatabase("shadow_pgsql")
+                .useSSL()
                 .get();
 
         this.pg = db.connect();
