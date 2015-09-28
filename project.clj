@@ -1,4 +1,4 @@
-(defproject thheller/shadow-pgsql "0.8.0-SNAPSHOT"
+(defproject thheller/shadow-pgsql "0.9.0-SNAPSHOT"
   :description "PostgreSQL Client for Java and Clojure"
   :url "http://github.com/thheller/shadow-pgsql"
   :license {:name "Eclipse Public License"
