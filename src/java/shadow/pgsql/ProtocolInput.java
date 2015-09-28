@@ -265,4 +265,7 @@ public class ProtocolInput {
         }
     }
 
+    public void skipFrame() {
+        current.position(current.limit());
+    }
 }

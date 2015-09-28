@@ -1,7 +1,5 @@
 package shadow.pgsql;
 
-import shadow.pgsql.types.Int4;
-
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,8 +21,6 @@ public final class SQL {
         QUERY,
         STATEMENT
     }
-
-    private static final Pattern PARAM_PATTERN = Pattern.compile("\\$([0-9]+)", Pattern.MULTILINE | Pattern.DOTALL);
 
     private final Type type;
     private final String name;
@@ -190,14 +186,7 @@ public final class SQL {
         }
 
         public int getParamCount() {
-            Matcher m = PARAM_PATTERN.matcher(sql);
-            int paramCount = 0;
-
-            while (m.find()) {
-                String d = m.group().substring(1);
-                paramCount = Math.max(paramCount, Integer.parseInt(d));
-            }
-            return paramCount;
+            return parseParamCount(sql);
         }
 
         public SQL create() {
@@ -224,5 +213,39 @@ public final class SQL {
 
     public static Builder statement(String sql) {
         return new Builder(Type.STATEMENT, sql);
+    }
+
+    public static int parseParamCount(final String sql) {
+        int length = sql.length();
+        int paramCount = 0;
+
+        boolean param = false;
+        int current = 0;
+        for (int i = 0; i < length; i++) {
+            char c = sql.charAt(i);
+
+            if (param) {
+                if (c >= 48 && c <= 57) {
+                    current = (current * 10) + (c - 48);
+
+                    if (current > 65536) {
+                        throw new IllegalStateException("exceeded maximum parameter count");
+                    }
+                } else {
+                    param = false;
+                    paramCount = Math.max(paramCount, current);
+                    current = 0;
+                }
+            } else if (c == '$') {
+                param = true;
+            }
+        }
+
+        // ends in param digits
+        if (param) {
+            paramCount = Math.max(paramCount, current);
+        }
+
+        return paramCount;
     }
 }

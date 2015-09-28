@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Random;
 import java.util.concurrent.TimeUnit;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Created by zilence on 19.09.15.
@@ -60,8 +62,6 @@ public class ShadowBenchmark implements AutoCloseable {
     public void close() throws Exception {
         this.pg.close();
     }
-
-
 
     public static void main(String[] args) throws Exception {
         ShadowBenchmark bench = new ShadowBenchmark();

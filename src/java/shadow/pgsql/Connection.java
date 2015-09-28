@@ -320,14 +320,87 @@ public class Connection implements AutoCloseable {
         }
     }
 
-    public Object executeWith(SQL sql, Object... params) throws IOException {
+    public StatementResult executeWith(SQL sql, Object... params) throws IOException {
         return execute(sql, Arrays.asList(params));
     }
 
+    public StatementResult execute(SQL sql) throws IOException {
+        return execute(sql, EMPTY_LIST);
+    }
+
     public StatementResult execute(SQL sql, List params) throws IOException {
-        try (PreparedSQL stmt = prepare(sql)) {
-            return stmt.execute(params);
+        final List<TypeHandler> paramEncoders = sql.getParameterTypes();
+        if (paramEncoders.size() != sql.getParamCount()) {
+            throw new IllegalArgumentException(String.format("SQL expects %d parameters, must specify their types. Only got %d types", sql.getParamCount(), paramEncoders.size()));
         }
+
+        checkReady();
+        output.checkReset();
+
+        output.writeParse(sql.getSQLString(), paramEncoders, null);
+        output.writeBind(paramEncoders.toArray(new TypeHandler[paramEncoders.size()]), params, sql, null, null, new short[]{1}); // all binary
+        // output.writeDescribePortal(null); // would only get a NoData 'n' or some data which is discarded so just skip it
+        output.writeExecute(null, 0);
+        output.writeSync();
+
+        output.flushAndReset();
+
+        StatementResult result = null;
+
+        Map<String, String> errorData = null;
+
+        boolean gotSomeData = false;
+
+        RESULT_LOOP:
+        while (true) {
+            final char type = input.readNextCommand();
+
+            switch (type) {
+                case '1': // ParseComplete
+                {
+                    input.checkSize("ParseComplete", 0);
+                    break;
+                }
+                case '2': // BindComplete
+                {
+                    input.checkSize("BindComplete", 0);
+                    break;
+                }
+                case 'C': { // CommandComplete
+                    final String tag = input.readString();
+
+                    result = new StatementResult(tag);
+                    break;
+                }
+                case 'D': {
+                    // discard
+                    input.skipFrame();
+                    gotSomeData = true;
+                    break;
+                }
+                case 'Z': {
+                    input.readReadyForQuery();
+                    break RESULT_LOOP;
+                }
+                case 'E': {
+                    errorData = input.readMessages();
+                    break;
+                }
+                default: {
+                    throw new IllegalStateException(String.format("invalid protocol action while reading statement results: '%s'", type));
+                }
+            }
+        }
+
+        if (errorData != null) {
+            throw new CommandException(String.format("Failed to execute Statement\n[sql]: %s", sql), errorData);
+        }
+
+        if (gotSomeData) {
+            throw new IllegalStateException("backend did send results, use a query instead of a statement. QUERY DID COMPLETE SUCCESSFULLY!");
+        }
+
+        return result;
     }
 
     public PreparedSQL prepare(SQL sql) throws IOException {

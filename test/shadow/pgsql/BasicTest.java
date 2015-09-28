@@ -30,15 +30,22 @@ public class BasicTest {
 
         this.pg = db.connect();
 
-        pg.executeWith(SQL.statement("DELETE FROM types").create());
-        pg.executeWith(SQL.statement("DELETE FROM num_types").create());
-        pg.executeWith(SQL.statement("DELETE FROM timestamp_types").create());
-        pg.executeWith(SQL.statement("DELETE FROM array_types").create());
+        pg.execute(SQL.statement("DELETE FROM types").create());
+        pg.execute(SQL.statement("DELETE FROM num_types").create());
+        pg.execute(SQL.statement("DELETE FROM timestamp_types").create());
+        pg.execute(SQL.statement("DELETE FROM array_types").create());
     }
 
     @After
     public void closeConnection() throws Exception {
         this.pg.close();
+    }
+
+    private static final String testSQL = "UPDATE something SET a = $1, b=$2 WHERE a=$3";
+
+    @Test
+    public void testParamCount() {
+        assertEquals(3, SQL.parseParamCount(testSQL));
     }
 
     @Test
@@ -61,6 +68,23 @@ public class BasicTest {
         assertTrue(numTypes.contains(1l));
         assertFalse(numTypes.contains(2l));
         assertTrue(numTypes.contains(3l));
+    }
+
+    @Test
+    public void testComplainAboutQueryAsStatement() throws IOException {
+        SQL insert = SQL.statement("INSERT INTO num_types (fint4) VALUES ($1)")
+                .addParameterType(Types.INT4)
+                .create();
+
+        pg.executeWith(insert, 4);
+
+        SQL sql = SQL.query("SELECT * FROM num_types").create();
+
+        try {
+            pg.execute(sql);
+            fail("should have thrown!");
+        } catch (IllegalStateException e) {
+        }
     }
 
     @Test
@@ -395,7 +419,10 @@ public class BasicTest {
     @Test
     public void testNotNull() throws Exception {
         try {
-            pg.executeWith(SQL.statement("INSERT INTO dummy (nnull) VALUES ($1)").create(), new Object[]{null});
+            final SQL sql = SQL.statement("INSERT INTO dummy (nnull) VALUES ($1)")
+                    .addParameterType(Types.TEXT)
+                    .create();
+            pg.executeWith(sql, new Object[]{null});
             fail("not supposed to succeed, handed null value to not null field");
         } catch (CommandException e) {
             // TODO: verify
@@ -405,9 +432,6 @@ public class BasicTest {
     public void nbaseRoundtrip(BigDecimal bd) {
         NBase nb = NBase.pack(bd);
         assertEquals(bd, nb.unpack());
-    }
-
-    public void nbaseRoundtripSQL(BigDecimal bd) {
     }
 
     private static final int NBASE_TESTS = 100;
