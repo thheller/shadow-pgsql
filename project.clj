@@ -5,10 +5,7 @@
             :url "http://www.eclipse.org/legal/epl-v10.html"}
 
   :dependencies [[org.apache.commons/commons-pool2 "2.2"]
-                 [io.dropwizard.metrics/metrics-core "3.1.2"]
-                 [org.postgresql/postgresql "9.4-1203-jdbc42"]
-                 [org.clojure/java.jdbc "0.4.2"]
-                 ]
+                 [io.dropwizard.metrics/metrics-core "3.1.2"]]
 
   :java-source-paths ["src/java"]
   :source-paths ["src/clj"]
@@ -21,5 +18,4 @@
              :benchmark {:source-paths ["src/benchmark"]
                          :java-source-paths ["src/benchmark"]
                          :dependencies [[org.clojure/clojure "1.7.0"]
-                                        [criterium "0.4.3"]
-                                        ]}})
+                                        [criterium "0.4.3"]]}})

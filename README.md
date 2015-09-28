@@ -3,7 +3,7 @@
 WARNING: Beta-Level Software, use at your own risk. I'm using it in production for a while now and successfully executed a couple million queries.
 
 ```
-[thheller/shadow-pgsql "0.7.0"]
+[thheller/shadow-pgsql "0.8.1"]
 ```
 
 I need to write some docs ...
@@ -40,7 +40,6 @@ JDK 8+, PostgreSQL 9+ (only tested against 9.1.2, 9.3.5, might work with older v
 - Docs
 - Auth Support (MD5, ...)
 - Generics (didn't write any serious Java for over 10 years, need to learn Generics first)
-- check Performance (should be faster than JDBC, but needs check to be sure)
 - Cursor Support
 - FunctionCall API
 - Copy API
