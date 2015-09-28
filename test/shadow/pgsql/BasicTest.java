@@ -83,6 +83,15 @@ public class BasicTest {
         try {
             pg.execute(sql);
             fail("should have thrown!");
+        } catch (IllegalArgumentException e) {
+        }
+
+        // ideally this would already through but I don't want to write an SQL parser
+        sql = SQL.statement("SELECT * FROM num_types").create();
+
+        try {
+            pg.execute(sql);
+            fail("should have thrown!");
         } catch (IllegalStateException e) {
         }
     }

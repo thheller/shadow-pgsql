@@ -329,6 +329,10 @@ public class Connection implements AutoCloseable {
     }
 
     public StatementResult execute(SQL sql, List params) throws IOException {
+        if (sql.expectsData()) {
+            throw new IllegalArgumentException("use .query instead of .execute for queries");
+        }
+
         final List<TypeHandler> paramEncoders = sql.getParameterTypes();
         if (paramEncoders.size() != sql.getParamCount()) {
             throw new IllegalArgumentException(String.format("SQL expects %d parameters, must specify their types. Only got %d types", sql.getParamCount(), paramEncoders.size()));
