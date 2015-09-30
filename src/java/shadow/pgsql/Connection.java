@@ -215,11 +215,16 @@ public class Connection implements AutoCloseable {
         checkReady();
         output.checkReset();
 
-        output.writeParse(sql.getSQLString(), paramEncoders, null);
-        output.writeBind(paramEncoders.toArray(new TypeHandler[paramEncoders.size()]), params, sql, null, null, new short[]{1}); // all binary
-        output.writeDescribePortal(null);
-        output.writeExecute(null, 0);
-        output.writeSync();
+        try {
+            output.writeParse(sql.getSQLString(), paramEncoders, null);
+            output.writeBind(paramEncoders.toArray(new TypeHandler[paramEncoders.size()]), params, sql, null, null, new short[]{1}); // all binary
+            output.writeDescribePortal(null);
+            output.writeExecute(null, 0);
+            output.writeSync();
+        } catch (Exception e) {
+            output.reset();
+            throw e;
+        }
 
         output.flushAndReset();
 
@@ -341,12 +346,17 @@ public class Connection implements AutoCloseable {
         checkReady();
         output.checkReset();
 
-        output.writeParse(sql.getSQLString(), paramEncoders, null);
-        output.writeBind(paramEncoders.toArray(new TypeHandler[paramEncoders.size()]), params, sql, null, null, new short[]{1}); // all binary
-        // output.writeDescribePortal(null); // would only get a NoData 'n' or some data which is discarded so just skip it
-        output.writeExecute(null, 0);
-        output.writeSync();
-
+        try {
+            output.writeParse(sql.getSQLString(), paramEncoders, null);
+            output.writeBind(paramEncoders.toArray(new TypeHandler[paramEncoders.size()]), params, sql, null, null, new short[]{1}); // all binary
+            // output.writeDescribePortal(null); // would only get a NoData 'n' or some data which is discarded so just skip it
+            output.writeExecute(null, 0);
+            output.writeSync();
+        } catch (Exception e) {
+            output.reset();
+            throw e;
+        }
+        
         output.flushAndReset();
 
         StatementResult result = null;
