@@ -3,7 +3,7 @@
 WARNING: Beta-Level Software, use at your own risk. I'm using it in production for a while now and successfully executed a couple million queries.
 
 ```
-[thheller/shadow-pgsql "0.8.1"]
+[thheller/shadow-pgsql "0.8.2"]
 ```
 
 I need to write some docs ...
