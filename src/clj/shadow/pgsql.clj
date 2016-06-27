@@ -207,7 +207,7 @@ legacy-keyword-type
         (let [idx (.indexOf s "/")]
           (if (not= -1 idx)
             (keyword (.substring s 0 idx)
-                     (.substring s idx))
+                     (.substring s (inc idx)))
             (keyword s)))))))
 
 (def ^{:doc "stores keywords as-is"}
@@ -225,7 +225,7 @@ keyword-type
         (let [idx (.indexOf s "/")]
           (if (not= -1 idx)
             (keyword (.substring s 1 idx)
-                     (.substring s idx))
+                     (.substring s (inc idx)))
             (keyword (.substring s 1))))))))
 
 (defn edn-type
