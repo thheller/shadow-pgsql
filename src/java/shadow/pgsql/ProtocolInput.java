@@ -257,6 +257,7 @@ public class ProtocolInput {
 
             return columnValue;
         } catch (Exception e) {
+            // FIXME: turns ALL Exceptions into IllegalStateException?
             throw new IllegalStateException(
                     String.format("Failed parsing field \"%s\" of table \"%s\"",
                             field.name,

@@ -9,6 +9,7 @@ import shadow.pgsql.types.Types;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.nio.ByteBuffer;
 import java.time.*;
 import java.util.*;
 
@@ -34,6 +35,7 @@ public class BasicTest {
         pg.execute(SQL.statement("DELETE FROM num_types").create());
         pg.execute(SQL.statement("DELETE FROM timestamp_types").create());
         pg.execute(SQL.statement("DELETE FROM array_types").create());
+        pg.execute(SQL.statement("DELETE FROM binary_types").create());
     }
 
     @After
@@ -481,5 +483,71 @@ public class BasicTest {
                 assertEquals(bd, pq.queryWith(bd));
             }
         }
+    }
+
+    public static final TypeHandler BROKEN_TYPE_HANDLER = new TypeHandler() {
+        @Override
+        public int getTypeOid() {
+            return -1;
+        }
+
+        @Override
+        public String getTypeName() {
+            return "text";
+        }
+
+        @Override
+        public boolean supportsBinary() {
+            return true;
+        }
+
+        @Override
+        public void encodeBinary(Connection con, ProtocolOutput output, Object param) {
+            throw new IllegalStateException("broken type");
+        }
+
+        @Override
+        public Object decodeBinary(Connection con, ColumnInfo field, ByteBuffer buf, int size) throws IOException {
+            throw new IllegalStateException("broken type");
+        }
+
+        @Override
+        public String encodeToString(Connection con, Object param) {
+            throw new IllegalStateException("broken type");
+        }
+
+        @Override
+        public Object decodeString(Connection con, ColumnInfo field, String value) {
+            throw new IllegalStateException("broken type");
+        }
+    };
+
+
+    @Test
+    public void testTypeParseErrorShouldNotBreakConnection() throws IOException {
+        final SQL sql = SQL.statement("INSERT INTO types (t_text) VALUES ($1)")
+                .addParameterType(Types.TEXT)
+                .create();
+        pg.executeWith(sql, "[:invalid \"edn]");
+
+        final TypeRegistry t = TypeRegistry
+                .copyDefault()
+                .registerColumnHandler("types", "t_text", BROKEN_TYPE_HANDLER)
+                .build();
+
+        final SQL queryWithBrokenType = SQL.query("SELECT * FROM types")
+                .withTypeRegistry(t)
+                .create();
+        try {
+            pg.query(queryWithBrokenType);
+            fail("should have failed with exception");
+        } catch (Exception e) {
+        }
+
+
+        final SQL normalQuery = SQL.query("SELECT * FROM types").create();
+
+        // this should succeed without error
+        pg.query(normalQuery);
     }
 }

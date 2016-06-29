@@ -228,6 +228,8 @@ public class Connection implements AutoCloseable {
 
         output.flushAndReset();
 
+        Exception invalidRow = null; // set if a row fails parsing
+
         ColumnInfo[] columnInfos = null; // created by 'T'
         TypeHandler[] columnDecoders = null;
 
@@ -283,7 +285,25 @@ public class Connection implements AutoCloseable {
                 }
                 case 'D': // DataRow
                 {
-                    queryResult = resultBuilder.add(queryResult, input.readRow(columnDecoders, columnInfos, rowBuilder));
+                    // if one row failed parsing we discard the rest
+                    // since we are just going to throw anyways
+                    // but we want the query to complete so the connection remains usable
+                    // since parsing is a client side issue and does not affect the server
+                    // it might be sending us garbage but it is far more likely we just
+                    // stored something we are not able to read back (user error)
+                    // discovered while trying to read some invalid [:edn "data]
+                    // that was manually inserted
+                    if (invalidRow != null) {
+                       input.skipFrame();
+                    } else {
+                        try {
+                            final Object row = input.readRow(columnDecoders, columnInfos, rowBuilder);
+                            queryResult = resultBuilder.add(queryResult, row);
+                        } catch (IllegalStateException e) {
+                            input.skipFrame();
+                            invalidRow = e;
+                        }
+                    }
                     break;
                 }
                 case 'C': { // CommandComplete
@@ -313,6 +333,8 @@ public class Connection implements AutoCloseable {
                 throw new IllegalStateException("Error but Parsed!");
             }
             throw new CommandException(String.format("Failed to prepare Statement\nsql: %s", sql.getSQLString()), errorData);
+        } else if (invalidRow != null) {
+            throw new IllegalStateException("query completed successfully but a type failed parsing", invalidRow);
         } else {
             if (!complete) {
                 throw new IllegalStateException("not complete");
