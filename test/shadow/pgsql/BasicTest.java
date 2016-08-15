@@ -550,4 +550,5 @@ public class BasicTest {
         // this should succeed without error
         pg.query(normalQuery);
     }
+
 }

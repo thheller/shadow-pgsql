@@ -110,7 +110,10 @@ public class Connection implements AutoCloseable {
                 }
                 case 'E': {
                     errorData = input.readMessages();
-                    break;
+                    // server closes immediately after sending errors on connect
+                    // don't continue loop as it will EOF
+                    // FIXME: better handling of these loops if the connection is interrupted as they lead to weird errors
+                    break STARTUP_LOOP;
                 }
                 case 'Z': {
                     input.readReadyForQuery();

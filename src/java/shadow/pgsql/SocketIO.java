@@ -78,7 +78,10 @@ public class SocketIO implements IO {
 
         if (recvBuffer.remaining() < 5)  {
             recvBuffer.compact();
-            if (channel.read(recvBuffer) < 5) {
+            final int read = channel.read(recvBuffer);
+            if (read == -1) {
+                throw new EOFException();
+            } else if (read < 5) {
                 throw new IllegalStateException("didnt refill enough for frame header");
             }
             recvBuffer.flip();
