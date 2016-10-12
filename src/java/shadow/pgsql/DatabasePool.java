@@ -5,6 +5,7 @@ import org.apache.commons.pool2.PooledObjectFactory;
 import org.apache.commons.pool2.impl.DefaultPooledObject;
 import org.apache.commons.pool2.impl.GenericObjectPool;
 
+import java.io.IOException;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -104,6 +105,13 @@ public class DatabasePool extends GenericObjectPool<Connection> {
             RESULT result = task.withConnection(con);
             checkConnection(con);
             return result;
+        } catch (IOException e) {
+            try {
+                invalidateObject(con);
+            } catch (Exception e2) {
+                System.out.format("Caught IOException, cannot invalidate con: %s\n", e2);
+            }
+            throw e;
         } finally {
             doneWithConnection(con);
         }
