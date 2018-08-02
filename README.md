@@ -1,9 +1,9 @@
 # shadow-pgsql
 
-WARNING: Beta-Level Software, use at your own risk. I'm using it in production for a while now and successfully executed a couple million queries.
+WARNING: Stay away from this. Stick with JDBC, this was not worth the effort!
 
 ```
-[thheller/shadow-pgsql "0.11.0"]
+[thheller/shadow-pgsql "0.13.0"]
 ```
 
 I need to write some docs ...
